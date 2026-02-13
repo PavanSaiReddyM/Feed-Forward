@@ -154,6 +154,12 @@ export default function DonorProfile() {
         </TouchableOpacity>
       )}
 
+      {/* SIGN OUT BUTTON */}
+      <TouchableOpacity style={styles.signOutButton}>
+        <MaterialCommunityIcons name="logout" size={22} color="#fff" />
+        <Text style={styles.signOutText}>Sign Out</Text>
+      </TouchableOpacity>
+
     </ScrollView>
   );
 }
@@ -312,6 +318,29 @@ const styles = StyleSheet.create({
   },
 
   saveButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+
+  signOutButton: {
+    backgroundColor: "#d32f2f",
+    margin: 20,
+    marginTop: 10,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
+    gap: 10,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+
+  signOutText: {
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
