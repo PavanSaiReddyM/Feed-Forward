@@ -80,8 +80,7 @@ There is no efficient real-time system connecting food donors and NGOs.
 - Rounded buttons & cards
 - Professional spacing
 - Bottom tab navigation
-
 ---
 
-## 📂 Project Structure
+
 
