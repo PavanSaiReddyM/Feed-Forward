@@ -1,6 +1,6 @@
 import { Tabs } from "expo-router";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, StyleSheet, Platform } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
 
 export default function DonorLayout() {
@@ -8,63 +8,67 @@ export default function DonorLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: true,
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.grayText,
+        tabBarLabelStyle: styles.label,
         tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabItem,
       }}
     >
-      {/* HOME */}
       <Tabs.Screen
         name="dashboard"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-
-      {/* ACTIVE */}
-      <Tabs.Screen
-        name="active-donations"
-        options={{
-          title: "Active",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="time-outline" size={size} color={color} />
-          ),
-        }}
-      />
-
-      {/* CENTER POST BUTTON */}
-      <Tabs.Screen
-        name="post-donation"
-        options={{
-          title: "",
-          tabBarIcon: () => (
-            <View style={styles.centerButton}>
-              <Ionicons name="add" size={28} color="#fff" />
+          tabBarLabel: "Home",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBg, focused && styles.iconBgActive]}>
+              <MaterialCommunityIcons name="view-dashboard-outline" size={22} color={color} />
             </View>
           ),
         }}
       />
-
-      {/* HISTORY */}
       <Tabs.Screen
-        name="donation-history"
+        name="active-donations"
         options={{
-          title: "History",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="refresh" size={size} color={color} />
+          tabBarLabel: "Active",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBg, focused && styles.iconBgActive]}>
+              <MaterialCommunityIcons name="clock-outline" size={22} color={color} />
+            </View>
           ),
         }}
       />
-
-      {/* PROFILE */}
+      {/* CENTER FAB */}
+      <Tabs.Screen
+        name="post-donation"
+        options={{
+          tabBarLabel: "",
+          tabBarIcon: () => (
+            <View style={styles.fab}>
+              <MaterialCommunityIcons name="plus" size={28} color="#fff" />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="donation-history"
+        options={{
+          tabBarLabel: "History",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBg, focused && styles.iconBgActive]}>
+              <MaterialCommunityIcons name="history" size={22} color={color} />
+            </View>
+          ),
+        }}
+      />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          tabBarLabel: "Profile",
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconBg, focused && styles.iconBgActive]}>
+              <MaterialCommunityIcons name="account-circle-outline" size={22} color={color} />
+            </View>
           ),
         }}
       />
@@ -74,16 +78,43 @@ export default function DonorLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: 70,
-    paddingBottom: 8,
+    height: Platform.OS === "ios" ? 85 : 65,
+    paddingBottom: Platform.OS === "ios" ? 20 : 8,
+    paddingTop: 6,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.08)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 14,
   },
-  centerButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  tabItem: { paddingTop: 0 },
+  label: {
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: -2,
+    includeFontPadding: false,
+  },
+  iconBg: {
+    width: 38, height: 28, borderRadius: 9,
+    justifyContent: "center", alignItems: "center",
+  },
+  iconBgActive: {
+    backgroundColor: COLORS.primaryGlow,
+  },
+  fab: {
+    width: 54, height: 54,
+    borderRadius: 27,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 30, // makes it float
+    marginBottom: Platform.OS === "ios" ? 18 : 22,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
   },
 });
