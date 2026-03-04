@@ -132,7 +132,7 @@ export default function NgoDashboard() {
                 </View>
 
                 {/* QUICK ACTIONS */}
-                <View style={styles.section}>
+                {/* <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Quick Actions</Text>
                     <View style={styles.actionsRow}>
                         {[
@@ -149,7 +149,7 @@ export default function NgoDashboard() {
                             </TouchableOpacity>
                         ))}
                     </View>
-                </View>
+                </View> */}
 
                 {/* RECENT ACTIVITY */}
                 <View style={styles.section}>

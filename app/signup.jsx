@@ -1,78 +1,80 @@
-
-
 import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Animated,
+  StyleSheet, Text, View, TextInput, TouchableOpacity,
+  ScrollView, KeyboardAvoidingView, Platform, Animated, Dimensions,
 } from "react-native";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../_constants/colors";
 
+const { height } = Dimensions.get("window");
+
 const ROLES = [
-  { key: "Restaurant", emoji: "🍽️", label: "Restaurant" },
-  { key: "Hotel", emoji: "🏨", label: "Hotel" },
-  { key: "Event", emoji: "🎪", label: "Event Org." },
-  { key: "Household", emoji: "🏠", label: "Household" },
-  { key: "NGO", emoji: "🤝", label: "NGO" },
-  { key: "Volunteer", emoji: "🚴", label: "Volunteer" },
+  { key: "Restaurant", emoji: "🍽️", label: "Restaurant", desc: "Share surplus meals" },
+  { key: "Hotel", emoji: "🏨", label: "Hotel / Catering", desc: "Donate event food" },
+  { key: "NGO", emoji: "🤝", label: "NGO / Charity", desc: "Receive & distribute" },
+  { key: "Volunteer", emoji: "🚴", label: "Volunteer", desc: "Help with pickup" },
 ];
 
-function StepProgress({ current, total }) {
+// ─── Step header bar ───────────────────────────────────────────────────────────
+function StepBar({ step }) {
   return (
-    <View style={styles.progressWrap}>
-      {Array.from({ length: total }).map((_, i) => {
-        const isActive = i === current;
-        const isDone = i < current;
-        return (
-          <View key={i} style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                isDone && styles.stepDone,
-                isActive && styles.stepActive,
-              ]}
-            >
-              {isDone ? (
-                <MaterialCommunityIcons name="check" size={13} color={COLORS.white} />
-              ) : (
-                <Text style={[styles.stepNum, isActive && styles.stepNumActive]}>{i + 1}</Text>
-              )}
-            </View>
-            {i < total - 1 && (
-              <View style={[styles.stepLine, (isDone || isActive) && styles.stepLineDone]} />
-            )}
+    <View style={sb.wrap}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={sb.item}>
+          <View style={[sb.circle, i < step && sb.done, i === step && sb.active]}>
+            {i < step
+              ? <MaterialCommunityIcons name="check" size={12} color="#fff" />
+              : <Text style={[sb.num, i === step && sb.numActive]}>{i + 1}</Text>
+            }
           </View>
-        );
-      })}
+          {i < 2 && <View style={[sb.line, i < step && sb.lineDone]} />}
+        </View>
+      ))}
     </View>
   );
 }
+const sb = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", paddingHorizontal: 4 },
+  item: { flexDirection: "row", alignItems: "center", flex: 1 },
+  circle: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: "#EBEBF0",
+    justifyContent: "center", alignItems: "center",
+    zIndex: 1,
+  },
+  active: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  done: { backgroundColor: COLORS.success },
+  num: { fontSize: 12, fontWeight: "700", color: "#AAA" },
+  numActive: { color: "#fff" },
+  line: { flex: 1, height: 2, backgroundColor: "#EBEBF0", marginHorizontal: 4 },
+  lineDone: { backgroundColor: COLORS.success },
+});
 
-function FilledInput({ label, value, onChangeText, placeholder, secureTextEntry, right, keyboardType, valid }) {
+// ─── Input field ──────────────────────────────────────────────────────────────
+function Field({ label, icon, value, onChangeText, placeholder,
+  secure, keyboardType, right, valid }) {
   const [focused, setFocused] = useState(false);
   return (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.label, focused && { color: COLORS.primary }]}>{label}</Text>
+    <View style={fld.group}>
+      <Text style={[fld.label, focused && { color: COLORS.primary }]}>{label}</Text>
       <View style={[
-        styles.inputWrap,
-        focused && styles.inputFocused,
-        valid && styles.inputValid,
+        fld.box,
+        focused && fld.boxFocused,
+        valid && fld.boxValid,
       ]}>
+        <MaterialCommunityIcons
+          name={icon}
+          size={18}
+          color={valid ? COLORS.success : focused ? COLORS.primary : COLORS.grayText}
+        />
         <TextInput
-          style={styles.input}
+          style={fld.input}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={COLORS.placeholder}
-          secureTextEntry={secureTextEntry}
+          secureTextEntry={secure}
           keyboardType={keyboardType}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
@@ -80,256 +82,253 @@ function FilledInput({ label, value, onChangeText, placeholder, secureTextEntry,
         />
         {right}
         {valid && !right && (
-          <MaterialCommunityIcons name="check-circle" size={20} color={COLORS.success} />
+          <MaterialCommunityIcons name="check-circle" size={18} color={COLORS.success} />
         )}
       </View>
     </View>
   );
 }
+const fld = StyleSheet.create({
+  group: { marginBottom: 16 },
+  label: { fontSize: 12, fontWeight: "700", color: COLORS.grayText, marginBottom: 7, letterSpacing: 0.3, textTransform: "uppercase" },
+  box: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F7F7FA",
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 14,
+    gap: 10, borderWidth: 1.5, borderColor: "transparent",
+  },
+  boxFocused: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryGlow },
+  boxValid: { borderColor: COLORS.success + "60", backgroundColor: "rgba(45,106,79,0.05)" },
+  input: { flex: 1, fontSize: 15, color: COLORS.textDark },
+});
 
-function PasswordStrength({ password }) {
-  const getStrength = () => {
-    let score = 0;
-    if (password.length >= 8) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
-    return score;
-  };
-  const strength = getStrength();
-  const labels = ["", "Weak", "Fair", "Good", "Strong"];
-  const colors = ["#ddd", COLORS.error, COLORS.warning, "#F4A261", COLORS.success];
-
+// ─── Password strength bar ─────────────────────────────────────────────────────
+function StrengthBar({ password }) {
   if (!password) return null;
+  let score = 0;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  const colors = ["", COLORS.error, COLORS.warning, "#F4A261", COLORS.success];
+  const labels = ["", "Weak", "Fair", "Good", "Strong"];
   return (
-    <View style={styles.strengthWrap}>
-      <View style={styles.strengthBars}>
-        {[1, 2, 3, 4].map((i) => (
-          <View
-            key={i}
-            style={[
-              styles.strengthBar,
-              { backgroundColor: strength >= i ? colors[strength] : "#E5E5EA" },
-            ]}
-          />
+    <View style={str.wrap}>
+      <View style={str.bars}>
+        {[1, 2, 3, 4].map(i => (
+          <View key={i} style={[str.bar, { backgroundColor: score >= i ? colors[score] : "#E5E5EA" }]} />
         ))}
       </View>
-      <Text style={[styles.strengthLabel, { color: colors[strength] }]}>{labels[strength]}</Text>
+      <Text style={[str.label, { color: colors[score] }]}>{labels[score]}</Text>
     </View>
   );
 }
+const str = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16, marginTop: -4 },
+  bars: { flex: 1, flexDirection: "row", gap: 5 },
+  bar: { flex: 1, height: 4, borderRadius: 2 },
+  label: { fontSize: 11, fontWeight: "700", width: 42, textAlign: "right" },
+});
 
+// ─── Main Signup ──────────────────────────────────────────────────────────────
 export default function Signup() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [role, setRole] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [showCpw, setShowCpw] = useState(false);
 
-  const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const stepTitles = ["Personal Info", "Choose Your Role", "Set Password"];
-  const stepIcons = ["account-outline", "account-group-outline", "lock-outline"];
+  const TITLES = ["Your Details", "Your Role", "Set Password"];
+  const SUBTITLES = ["Tell us about yourself", "How will you use Food Saver?", "Secure your account"];
 
-  const goNext = () => {
-    // Animate out/in
+  const canGoNext = [
+    name.length > 1 && email.includes("@") && phone.length >= 8,
+    !!role,
+    password.length >= 6 && password === confirmPw,
+  ][step];
+
+  const transition = (direction, cb) => {
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: -30, duration: 150, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 140, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: direction * -24, duration: 140, useNativeDriver: true }),
     ]).start(() => {
-      setStep((s) => s + 1);
-      slideAnim.setValue(30);
+      cb();
+      slideAnim.setValue(direction * 24);
       Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 1, duration: 240, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 240, useNativeDriver: true }),
       ]).start();
     });
   };
 
-  const goBack = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 30, duration: 150, useNativeDriver: true }),
-    ]).start(() => {
-      setStep((s) => s - 1);
-      slideAnim.setValue(-30);
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
-      ]).start();
-    });
-  };
-
-  const isStep0Valid = name.length > 1 && email.includes("@") && phone.length >= 8;
-  const isStep1Valid = !!role;
-  const isStep2Valid = password.length >= 6 && password === confirmPassword;
-
-  const canProceed = [isStep0Valid, isStep1Valid, isStep2Valid][step];
+  const goNext = () => transition(1, () => setStep(s => s + 1));
+  const goBack = () => transition(-1, () => setStep(s => s - 1));
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerBlob} />
-        {step > 0 && (
-          <TouchableOpacity style={styles.backBtn} onPress={goBack}>
-            <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.white} />
-          </TouchableOpacity>
-        )}
-        <View style={styles.headerIcon}>
-          <MaterialCommunityIcons name={stepIcons[step]} size={26} color={COLORS.primary} />
-        </View>
-        <Text style={styles.headerTitle}>{stepTitles[step]}</Text>
-        <Text style={styles.headerSub}>Step {step + 1} of 3</Text>
-        <StepProgress current={step} total={3} />
+      {/* ── TOP NAV ── */}
+      <View style={styles.nav}>
+        <TouchableOpacity
+          style={styles.navBack}
+          onPress={step === 0 ? () => router.back() : goBack}
+        >
+          <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.textDark} />
+        </TouchableOpacity>
+        <Text style={styles.navStep}>{step + 1} / 3</Text>
+        <TouchableOpacity onPress={() => router.push("/login")}>
+          <Text style={styles.navSkip}>Sign in</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Content */}
+      {/* ── PROGRESS BAR (full width animated) ── */}
+      <View style={styles.progressTrack}>
+        <Animated.View
+          style={[styles.progressFill, { width: `${((step + 1) / 3) * 100}%` }]}
+        />
+      </View>
+
+      {/* ── HEADING ── */}
+      <View style={styles.heading}>
+        <StepBar step={step} />
+        <Text style={styles.headTitle}>{TITLES[step]}</Text>
+        <Text style={styles.headSub}>{SUBTITLES[step]}</Text>
+      </View>
+
+      {/* ── FORM CONTENT ── */}
       <ScrollView
-        style={styles.scrollArea}
+        style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-          {/* Step 0: Personal Info */}
+          {/* STEP 0 */}
           {step === 0 && (
-            <View>
-              <FilledInput label="Full Name" value={name} onChangeText={setName}
-                placeholder="Your full name" valid={name.length > 1} />
-              <FilledInput label="Email Address" value={email} onChangeText={setEmail}
+            <>
+              <Field label="Full Name" icon="account-outline"
+                value={name} onChangeText={setName}
+                placeholder="John Doe"
+                valid={name.length > 1} />
+              <Field label="Email Address" icon="email-outline"
+                value={email} onChangeText={setEmail}
                 placeholder="you@example.com" keyboardType="email-address"
                 valid={email.includes("@") && email.includes(".")} />
-              <FilledInput label="Phone Number" value={phone} onChangeText={setPhone}
+              <Field label="Phone Number" icon="phone-outline"
+                value={phone} onChangeText={setPhone}
                 placeholder="+91 98765 43210" keyboardType="phone-pad"
                 valid={phone.length >= 8} />
-            </View>
+            </>
           )}
 
-          {/* Step 1: Role */}
+          {/* STEP 1 – Role */}
           {step === 1 && (
-            <View>
-              <Text style={styles.rolePrompt}>What best describes you?</Text>
-              <View style={styles.rolesGrid}>
-                {ROLES.map((r) => (
+            <View style={styles.rolesGrid}>
+              {ROLES.map((r) => {
+                const active = role === r.key;
+                return (
                   <TouchableOpacity
                     key={r.key}
-                    style={[styles.roleCard, role === r.key && styles.roleCardActive]}
+                    style={[styles.roleCard, active && styles.roleCardActive]}
                     onPress={() => setRole(r.key)}
                     activeOpacity={0.8}
                   >
-                    <View style={[styles.roleEmojiWrap, role === r.key && styles.roleEmojiWrapActive]}>
+                    <View style={[styles.roleEmojiBg, active && styles.roleEmojiBgActive]}>
                       <Text style={styles.roleEmoji}>{r.emoji}</Text>
                     </View>
-                    <Text style={[styles.roleCardLabel, role === r.key && styles.roleCardLabelActive]}>
-                      {r.label}
-                    </Text>
-                    {role === r.key && (
-                      <View style={styles.roleCheck}>
-                        <MaterialCommunityIcons name="check-circle" size={18} color={COLORS.white} />
-                      </View>
-                    )}
+                    <View style={styles.roleText}>
+                      <Text style={[styles.roleLabel, active && styles.roleLabelActive]}>{r.label}</Text>
+                      <Text style={styles.roleDesc}>{r.desc}</Text>
+                    </View>
+                    <View style={[styles.roleRadio, active && styles.roleRadioActive]}>
+                      {active && <View style={styles.roleRadioDot} />}
+                    </View>
                   </TouchableOpacity>
-                ))}
-              </View>
+                );
+              })}
             </View>
           )}
 
-          {/* Step 2: Password */}
+          {/* STEP 2 – Password */}
           {step === 2 && (
-            <View>
-              <FilledInput
-                label="Password"
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Min. 6 characters"
-                secureTextEntry={!showPassword}
+            <>
+              <Field label="Password" icon="lock-outline"
+                value={password} onChangeText={setPassword}
+                placeholder="Min. 6 characters" secure={!showPw}
                 right={
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                    <MaterialCommunityIcons
-                      name={showPassword ? "eye-outline" : "eye-off-outline"}
-                      size={20}
-                      color={COLORS.grayText}
-                    />
+                  <TouchableOpacity onPress={() => setShowPw(v => !v)} style={{ padding: 2 }}>
+                    <MaterialCommunityIcons name={showPw ? "eye-outline" : "eye-off-outline"} size={18} color={COLORS.grayText} />
                   </TouchableOpacity>
                 }
               />
-              <PasswordStrength password={password} />
+              <StrengthBar password={password} />
 
-              <FilledInput
-                label="Confirm Password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Repeat your password"
-                secureTextEntry={!showConfirm}
-                valid={confirmPassword.length > 0 && confirmPassword === password}
+              <Field label="Confirm Password" icon="lock-check-outline"
+                value={confirmPw} onChangeText={setConfirmPw}
+                placeholder="Repeat password" secure={!showCpw}
+                valid={confirmPw.length > 0 && confirmPw === password}
                 right={
-                  <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} style={{ padding: 4 }}>
-                    <MaterialCommunityIcons
-                      name={showConfirm ? "eye-outline" : "eye-off-outline"}
-                      size={20}
-                      color={COLORS.grayText}
-                    />
+                  <TouchableOpacity onPress={() => setShowCpw(v => !v)} style={{ padding: 2 }}>
+                    <MaterialCommunityIcons name={showCpw ? "eye-outline" : "eye-off-outline"} size={18} color={COLORS.grayText} />
                   </TouchableOpacity>
                 }
               />
 
               {/* Summary */}
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Account Summary</Text>
-                <View style={styles.summaryRow}>
-                  <MaterialCommunityIcons name="account" size={16} color={COLORS.grayText} />
-                  <Text style={styles.summaryVal}>{name || "—"}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <MaterialCommunityIcons name="email" size={16} color={COLORS.grayText} />
-                  <Text style={styles.summaryVal}>{email || "—"}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <MaterialCommunityIcons name="account-group" size={16} color={COLORS.grayText} />
-                  <Text style={styles.summaryVal}>{role || "—"}</Text>
-                </View>
+                <Text style={styles.summaryTitle}>Account Preview</Text>
+                {[
+                  { icon: "account", val: name || "—" },
+                  { icon: "email", val: email || "—" },
+                  { icon: "phone", val: phone || "—" },
+                  { icon: "account-group", val: ROLES.find(r => r.key === role)?.label || "—" },
+                ].map((row, i) => (
+                  <View key={i} style={styles.summaryRow}>
+                    <MaterialCommunityIcons name={row.icon} size={15} color={COLORS.grayText} />
+                    <Text style={styles.summaryVal}>{row.val}</Text>
+                  </View>
+                ))}
               </View>
-            </View>
+            </>
           )}
         </Animated.View>
       </ScrollView>
 
-      {/* Bottom CTA */}
-      <View style={styles.bottomBar}>
+      {/* ── BOTTOM CTA ── */}
+      <View style={styles.bottom}>
         <TouchableOpacity
-          style={[styles.nextBtn, !canProceed && styles.nextBtnDisabled]}
+          style={[styles.nextBtn, !canGoNext && styles.nextBtnOff]}
           onPress={step < 2 ? goNext : () => router.replace("/login")}
-          disabled={!canProceed}
-          activeOpacity={0.85}
+          disabled={!canGoNext}
+          activeOpacity={0.86}
         >
           <Text style={styles.nextBtnText}>
             {step === 2 ? "Create Account" : "Continue"}
           </Text>
           <MaterialCommunityIcons
             name={step === 2 ? "check" : "arrow-right"}
-            size={20}
-            color={COLORS.white}
+            size={20} color="#fff"
           />
         </TouchableOpacity>
 
         {step === 0 && (
-          <Text style={styles.loginText}>
-            Already have an account?{" "}
-            <Text style={styles.loginLink} onPress={() => router.push("/login")}>
-              Sign in
-            </Text>
-          </Text>
+          <View style={styles.loginRow}>
+            <Text style={styles.loginText}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => router.push("/login")}>
+              <Text style={styles.loginLink}>Sign in</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </KeyboardAvoidingView>
@@ -337,300 +336,106 @@ export default function Signup() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
+  root: { flex: 1, backgroundColor: "#fff" },
+
+  // Nav
+  nav: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 56 : 44,
+    paddingBottom: 12,
   },
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingHorizontal: 28,
-    paddingBottom: 28,
-    overflow: "hidden",
-  },
-  headerBlob: {
-    position: "absolute",
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: COLORS.primaryLight,
-    opacity: 0.2,
-    top: -60,
-    right: -60,
-  },
-  backBtn: {
-    marginBottom: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.white,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: COLORS.white,
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  headerSub: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.7)",
-    marginBottom: 20,
-  },
-  progressWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  stepItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.3)",
-  },
-  stepActive: {
-    backgroundColor: COLORS.white,
-    borderColor: COLORS.white,
-  },
-  stepDone: {
-    backgroundColor: COLORS.success,
-    borderColor: COLORS.success,
-  },
-  stepNum: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.7)",
-  },
-  stepNumActive: {
-    color: COLORS.primary,
-  },
-  stepLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    marginHorizontal: 4,
-  },
-  stepLineDone: {
-    backgroundColor: "rgba(255,255,255,0.6)",
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 16,
-  },
-  inputGroup: {
-    marginBottom: 18,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.grayText,
-    marginBottom: 8,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
+  navBack: {
+    width: 40, height: 40, borderRadius: 12,
     backgroundColor: "#F5F5F8",
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "rgba(0,0,0,0.07)",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
+    justifyContent: "center", alignItems: "center",
   },
-  inputFocused: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryGlow,
-  },
-  inputValid: {
-    borderColor: COLORS.success,
-    backgroundColor: "rgba(45,106,79,0.06)",
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.textDark,
-  },
-  strengthWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: -8,
-    marginBottom: 16,
-    paddingHorizontal: 2,
-  },
-  strengthBars: {
-    flex: 1,
-    flexDirection: "row",
-    gap: 4,
-  },
-  strengthBar: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-  },
-  strengthLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    width: 44,
-    textAlign: "right",
-  },
-  rolePrompt: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: COLORS.textMid,
-    marginBottom: 16,
-  },
-  rolesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
+  navStep: { fontSize: 13, fontWeight: "700", color: COLORS.grayText },
+  navSkip: { fontSize: 14, fontWeight: "700", color: COLORS.primary },
+
+  // Progress
+  progressTrack: { height: 3, backgroundColor: "#EBEBF0", marginHorizontal: 20, borderRadius: 2, marginBottom: 24, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: COLORS.primary, borderRadius: 2 },
+
+  // Heading
+  heading: { paddingHorizontal: 22, marginBottom: 24, gap: 12 },
+  headTitle: { fontSize: 26, fontWeight: "800", color: COLORS.textDark, letterSpacing: -0.4, marginTop: 4 },
+  headSub: { fontSize: 14, color: COLORS.grayText, lineHeight: 20 },
+
+  // Scroll
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 22, paddingBottom: 20 },
+
+  // Roles
+  rolesGrid: { gap: 12 },
   roleCard: {
-    width: "30%",
-    aspectRatio: 0.9,
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    padding: 12,
-    gap: 8,
-    position: "relative",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: "#F7F7FA",
+    borderRadius: 16, padding: 16,
+    borderWidth: 1.5, borderColor: "transparent",
   },
   roleCardActive: {
     borderColor: COLORS.primary,
     backgroundColor: COLORS.primaryGlow,
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.2,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 3,
   },
-  roleEmojiWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: COLORS.peach,
-    justifyContent: "center",
-    alignItems: "center",
+  roleEmojiBg: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: "#EBEBF0",
+    justifyContent: "center", alignItems: "center",
   },
-  roleEmojiWrapActive: {
+  roleEmojiBgActive: { backgroundColor: COLORS.primary + "22" },
+  roleEmoji: { fontSize: 24 },
+  roleText: { flex: 1 },
+  roleLabel: { fontSize: 15, fontWeight: "700", color: COLORS.textDark, marginBottom: 2 },
+  roleLabelActive: { color: COLORS.primary },
+  roleDesc: { fontSize: 12, color: COLORS.grayText },
+  roleRadio: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: "#D0D0D8",
+    justifyContent: "center", alignItems: "center",
+  },
+  roleRadioActive: { borderColor: COLORS.primary },
+  roleRadioDot: {
+    width: 10, height: 10, borderRadius: 5,
     backgroundColor: COLORS.primary,
   },
-  roleEmoji: {
-    fontSize: 22,
-  },
-  roleCardLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textMid,
-    textAlign: "center",
-  },
-  roleCardLabelActive: {
-    color: COLORS.primary,
-  },
-  roleCheck: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+
+  // Summary
   summaryCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 18,
-    marginTop: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    gap: 10,
+    backgroundColor: COLORS.bg, borderRadius: 16,
+    padding: 18, gap: 10,
+    borderWidth: 1.5, borderColor: "rgba(0,0,0,0.07)",
+    marginTop: 4,
   },
   summaryTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: COLORS.grayText,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 4,
+    fontSize: 11, fontWeight: "800", color: COLORS.grayText,
+    textTransform: "uppercase", letterSpacing: 1, marginBottom: 2,
   },
-  summaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  summaryVal: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.textDark,
-  },
-  bottomBar: {
-    padding: 20,
-    paddingBottom: 36,
-    gap: 14,
-    backgroundColor: COLORS.bg,
+  summaryRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  summaryVal: { fontSize: 14, fontWeight: "600", color: COLORS.textDark },
+
+  // Bottom CTA
+  bottom: {
+    paddingHorizontal: 22,
+    paddingBottom: Platform.OS === "ios" ? 36 : 24,
+    paddingTop: 16,
+    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    borderTopColor: "#F0F0F5",
+    gap: 12,
   },
   nextBtn: {
     backgroundColor: COLORS.primary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 18,
-    borderRadius: 18,
-    gap: 8,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 17, borderRadius: 16,
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOpacity: 0.26, shadowRadius: 16, elevation: 6,
   },
-  nextBtnDisabled: {
-    backgroundColor: COLORS.placeholder,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  nextBtnText: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  loginText: {
-    textAlign: "center",
-    fontSize: 14,
-    color: COLORS.grayText,
-  },
-  loginLink: {
-    color: COLORS.primary,
-    fontWeight: "800",
-  },
+  nextBtnOff: { backgroundColor: "#D0D0D8", shadowOpacity: 0, elevation: 0 },
+  nextBtnText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
+  loginRow: { flexDirection: "row", justifyContent: "center" },
+  loginText: { fontSize: 13, color: COLORS.grayText },
+  loginLink: { fontSize: 13, fontWeight: "800", color: COLORS.primary },
 });

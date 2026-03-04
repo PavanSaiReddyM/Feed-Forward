@@ -1,5 +1,3 @@
-
-
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import { useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
@@ -23,7 +21,6 @@ export default function Splash() {
   const ring3Scale = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    // Logo entrance
     Animated.spring(logoScale, {
       toValue: 1,
       tension: 60,
@@ -37,22 +34,24 @@ export default function Splash() {
       useNativeDriver: true,
     }).start();
 
-    // Title slide up
     Animated.sequence([
       Animated.delay(300),
       Animated.parallel([
         Animated.timing(titleOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(titleY, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(titleY, {
+          toValue: 0,
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
       ]),
     ]).start();
 
-    // Subtitle
     Animated.sequence([
       Animated.delay(550),
       Animated.timing(subtitleOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
     ]).start();
 
-    // Ripple rings staggered
     const ringAnim = (opacity, scale, delay) =>
       Animated.sequence([
         Animated.delay(delay),
@@ -62,7 +61,12 @@ export default function Splash() {
               Animated.timing(opacity, { toValue: 0.35, duration: 200, useNativeDriver: true }),
               Animated.timing(opacity, { toValue: 0, duration: 900, useNativeDriver: true }),
             ]),
-            Animated.timing(scale, { toValue: 2.2, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+            Animated.timing(scale, {
+              toValue: 2.2,
+              duration: 1100,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
           ]),
           { iterations: 3 }
         ),
@@ -72,7 +76,6 @@ export default function Splash() {
     ringAnim(ring2Opacity, ring2Scale, 850).start();
     ringAnim(ring3Opacity, ring3Scale, 1100).start();
 
-    // Progress bar
     Animated.sequence([
       Animated.delay(400),
       Animated.timing(progressWidth, {
@@ -83,39 +86,34 @@ export default function Splash() {
       }),
     ]).start();
 
-    const timer = setTimeout(() => router.replace("/welcome"), 2600);
+    // ✅ Splash → Onboarding → Welcome → Login (correct flow)
+    const timer = setTimeout(() => router.replace("/onboarding"), 2600);
     return () => clearTimeout(timer);
   }, []);
 
   return (
     <View style={styles.container}>
-      {/* Background gradient effect */}
       <View style={styles.bgCircle1} />
       <View style={styles.bgCircle2} />
 
-      {/* Ripple rings */}
       <Animated.View style={[styles.ring, { opacity: ring1Opacity, transform: [{ scale: ring1Scale }] }]} />
       <Animated.View style={[styles.ring, { opacity: ring2Opacity, transform: [{ scale: ring2Scale }] }]} />
       <Animated.View style={[styles.ring, { opacity: ring3Opacity, transform: [{ scale: ring3Scale }] }]} />
 
-      {/* Logo */}
       <Animated.View style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
         <View style={styles.logoCircle}>
           <Text style={styles.logoEmoji}>🍃</Text>
         </View>
       </Animated.View>
 
-      {/* Title */}
       <Animated.View style={{ opacity: titleOpacity, transform: [{ translateY: titleY }] }}>
         <Text style={styles.title}>Food Saver</Text>
       </Animated.View>
 
-      {/* Subtitle */}
       <Animated.Text style={[styles.subtitle, { opacity: subtitleOpacity }]}>
         Connect · Share · Reduce Waste
       </Animated.Text>
 
-      {/* Progress bar */}
       <View style={styles.progressTrack}>
         <Animated.View
           style={[
@@ -182,9 +180,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.35)",
   },
-  logoEmoji: {
-    fontSize: 52,
-  },
+  logoEmoji: { fontSize: 52 },
   title: {
     fontSize: 36,
     fontWeight: "800",

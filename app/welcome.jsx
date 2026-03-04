@@ -1,12 +1,6 @@
-
 import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  Animated,
-  Easing,
-  Dimensions,
+  StyleSheet, Text, View, TouchableOpacity,
+  Animated, Easing, Dimensions, Image, Platform,
 } from "react-native";
 import { useEffect, useRef } from "react";
 import { useRouter } from "expo-router";
@@ -14,152 +8,129 @@ import { COLORS } from "../_constants/colors";
 
 const { width, height } = Dimensions.get("window");
 
-const Feature = ({ emoji, label, delay, animVal }) => (
-  <Animated.View
-    style={[
-      styles.featureChip,
-      {
-        opacity: animVal,
-        transform: [
-          {
-            translateY: animVal.interpolate({
-              inputRange: [0, 1],
-              outputRange: [12, 0],
-            }),
-          },
-        ],
-      },
-    ]}
-  >
-    <Text style={styles.featureEmoji}>{emoji}</Text>
-    <Text style={styles.featureLabel}>{label}</Text>
-  </Animated.View>
-);
+// Stats shown in the trust strip
+const STATS = [
+  { value: "50K+", label: "Meals Shared" },
+  { value: "200+", label: "NGO Partners" },
+  { value: "12K+", label: "Donors" },
+];
 
 export default function Welcome() {
   const router = useRouter();
 
-  const heroOpacity = useRef(new Animated.Value(0)).current;
-  const heroY = useRef(new Animated.Value(30)).current;
-  const chipOpacity = useRef(new Animated.Value(0)).current;
-  const btnsOpacity = useRef(new Animated.Value(0)).current;
-  const btnsY = useRef(new Animated.Value(24)).current;
-  const bowlFloat = useRef(new Animated.Value(0)).current;
-  const stemRotate = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const imgScale = useRef(new Animated.Value(1.08)).current;
+  const cardY = useRef(new Animated.Value(60)).current;
+  const cardOpac = useRef(new Animated.Value(0)).current;
+  const btn1Y = useRef(new Animated.Value(24)).current;
+  const btn2Y = useRef(new Animated.Value(32)).current;
+  const btnOpac = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Hero text
-    Animated.parallel([
-      Animated.timing(heroOpacity, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(heroY, { toValue: 0, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start();
+    // Background image settles
+    Animated.timing(imgScale, {
+      toValue: 1, duration: 1200,
+      easing: Easing.out(Easing.cubic), useNativeDriver: true,
+    }).start();
 
-    // Chips
+    // Overlay fade
+    Animated.timing(fadeAnim, {
+      toValue: 1, duration: 700, useNativeDriver: true,
+    }).start();
+
+    // Card slides up
     Animated.sequence([
       Animated.delay(300),
-      Animated.timing(chipOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-    ]).start();
-
-    // Buttons
-    Animated.sequence([
-      Animated.delay(500),
       Animated.parallel([
-        Animated.timing(btnsOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(btnsY, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(cardY, { toValue: 0, duration: 550, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(cardOpac, { toValue: 1, duration: 550, useNativeDriver: true }),
       ]),
     ]).start();
 
-    // Floating bowl
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bowlFloat, { toValue: -10, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(bowlFloat, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    ).start();
-
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(stemRotate, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(stemRotate, { toValue: -1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ])
-    ).start();
+    // Buttons stagger
+    Animated.sequence([
+      Animated.delay(600),
+      Animated.parallel([
+        Animated.timing(btnOpac, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(btn1Y, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
+    ]).start();
+    Animated.sequence([
+      Animated.delay(750),
+      Animated.timing(btn2Y, { toValue: 0, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
   }, []);
-
-  const stemRotateDeg = stemRotate.interpolate({
-    inputRange: [-1, 1],
-    outputRange: ["-6deg", "6deg"],
-  });
 
   return (
     <View style={styles.container}>
-      {/* Decorative blobs */}
-      <View style={styles.blob1} />
-      <View style={styles.blob2} />
-      <View style={styles.blob3} />
 
-      {/* Top Section */}
-      <View style={styles.top}>
-        {/* Illustration */}
-        <Animated.View style={[styles.illustrationWrap, { transform: [{ translateY: bowlFloat }] }]}>
-          <View style={styles.plateOuter}>
-            <View style={styles.plateInner}>
-              <Animated.Text style={[styles.illustrationEmoji, { transform: [{ rotate: stemRotateDeg }] }]}>
-                🥗
-              </Animated.Text>
-            </View>
-          </View>
-          {/* Steam wisps */}
-          <View style={styles.steamRow}>
-            {["〰", "〰", "〰"].map((s, i) => (
-              <Text key={i} style={[styles.steam, { opacity: 0.3 + i * 0.15 }]}>{s}</Text>
-            ))}
-          </View>
-        </Animated.View>
+      {/* ── HERO IMAGE (full bleed top) ── */}
+      <Animated.Image
+        source={{ uri: "https://images.unsplash.com/photo-1593113598332-cd288d649433?w=900&q=85" }}
+        style={[styles.heroImage, { transform: [{ scale: imgScale }] }]}
+        resizeMode="cover"
+      />
 
-        {/* Hero Text */}
-        <Animated.View style={{ opacity: heroOpacity, transform: [{ translateY: heroY }] }}>
-          <Text style={styles.headline}>Food shouldn't{"\n"}go to waste.</Text>
-          <Text style={styles.subheadline}>
-            Connect donors with people in need — instantly, nearby, always.
-          </Text>
-        </Animated.View>
+      {/* Dark gradient overlay */}
+      <View style={styles.overlay} />
 
-        {/* Feature chips */}
-        <Animated.View style={[styles.chipsRow, { opacity: chipOpacity }]}>
-          {[
-            { emoji: "🤝", label: "Connect" },
-            { emoji: "📍", label: "Locate" },
-            { emoji: "❤️", label: "Share" },
-          ].map((f) => (
-            <View key={f.label} style={styles.featureChip}>
-              <Text style={styles.featureEmoji}>{f.emoji}</Text>
-              <Text style={styles.featureLabel}>{f.label}</Text>
+      {/* Brand badge top-left */}
+      <Animated.View style={[styles.brandBadge, { opacity: fadeAnim }]}>
+        <Text style={styles.brandEmoji}>🍃</Text>
+        <Text style={styles.brandName}>Food Saver</Text>
+      </Animated.View>
+
+      {/* ── BOTTOM SHEET CARD ── */}
+      <Animated.View
+        style={[styles.card, { opacity: cardOpac, transform: [{ translateY: cardY }] }]}
+      >
+        {/* Handle */}
+        <View style={styles.handle} />
+
+        {/* Headline */}
+        <Text style={styles.headline}>Feed Someone{"\n"}Today. 🌱</Text>
+        <Text style={styles.subline}>
+          Connect surplus food with people who need it most — real-time, nearby, zero waste.
+        </Text>
+
+        {/* Trust stats strip */}
+        <View style={styles.statsRow}>
+          {STATS.map((s, i) => (
+            <View key={i} style={[styles.statCell, i < STATS.length - 1 && styles.statCellBorder]}>
+              <Text style={styles.statValue}>{s.value}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
             </View>
           ))}
-        </Animated.View>
-      </View>
+        </View>
 
-      {/* Bottom Buttons */}
-      <Animated.View style={[styles.bottom, { opacity: btnsOpacity, transform: [{ translateY: btnsY }] }]}>
-        <TouchableOpacity
-          style={styles.loginBtn}
-          activeOpacity={0.85}
-          onPress={() => router.push("/login")}
-        >
-          <Text style={styles.loginBtnText}>Sign In</Text>
-        </TouchableOpacity>
+        {/* Buttons */}
+        <View style={styles.btns}>
+          <Animated.View style={{ opacity: btnOpac, transform: [{ translateY: btn1Y }] }}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              activeOpacity={0.88}
+              onPress={() => router.push("/signup")}
+            >
+              <Text style={styles.primaryBtnText}>Create Free Account</Text>
+            </TouchableOpacity>
+          </Animated.View>
 
-        <TouchableOpacity
-          style={styles.signupBtn}
-          activeOpacity={0.85}
-          onPress={() => router.push("/signup")}
-        >
-          <Text style={styles.signupBtnText}>Create Account</Text>
-        </TouchableOpacity>
+          <Animated.View style={{ opacity: btnOpac, transform: [{ translateY: btn2Y }] }}>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              activeOpacity={0.88}
+              onPress={() => router.push("/login")}
+            >
+              <Text style={styles.secondaryBtnText}>I already have an account</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
 
-        <Text style={styles.termsText}>
+        {/* Terms */}
+        <Text style={styles.terms}>
           By continuing you agree to our{" "}
-          <Text style={styles.termsLink}>Terms & Privacy Policy</Text>
+          <Text style={styles.termsLink}>Terms</Text> &{" "}
+          <Text style={styles.termsLink}>Privacy Policy</Text>
         </Text>
       </Animated.View>
     </View>
@@ -167,175 +138,154 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-    justifyContent: "space-between",
-  },
-  blob1: {
+  container: { flex: 1, backgroundColor: "#0A0A0A" },
+
+  heroImage: {
     position: "absolute",
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: COLORS.primary,
-    opacity: 0.07,
-    top: -80,
-    right: -80,
+    top: 0, left: 0, right: 0,
+    width, height: height * 0.58,
   },
-  blob2: {
+  overlay: {
     position: "absolute",
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: COLORS.success,
-    opacity: 0.06,
-    top: height * 0.2,
-    left: -60,
+    top: 0, left: 0, right: 0,
+    height: height * 0.62,
+    // Layered shadow from bottom up
+    backgroundColor: "rgba(10,10,10,0.38)",
   },
-  blob3: {
+
+  brandBadge: {
     position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: COLORS.warning,
-    opacity: 0.08,
-    bottom: 160,
-    right: -50,
-  },
-  top: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 28,
-    paddingTop: 60,
-  },
-  illustrationWrap: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  plateOuter: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: COLORS.peach,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  plateInner: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.white,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  illustrationEmoji: {
-    fontSize: 52,
-  },
-  steamRow: {
+    top: Platform.OS === "ios" ? 56 : 44,
+    left: 24,
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    marginTop: 6,
-    transform: [{ rotate: "90deg" }],
+    backgroundColor: "rgba(0,0,0,0.35)",
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
   },
-  steam: {
-    fontSize: 16,
-    color: COLORS.primaryLight,
+  brandEmoji: { fontSize: 17 },
+  brandName: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: 0.2,
   },
+
+  card: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    paddingHorizontal: 26,
+    paddingTop: 20,
+    paddingBottom: Platform.OS === "ios" ? 44 : 32,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 28,
+    elevation: 24,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: "#E0E0E0",
+    alignSelf: "center",
+    marginBottom: 24,
+  },
+
   headline: {
-    fontSize: 38,
+    fontSize: 34,
     fontWeight: "800",
     color: COLORS.textDark,
-    textAlign: "center",
-    lineHeight: 44,
     letterSpacing: -0.8,
-    marginBottom: 14,
+    lineHeight: 40,
+    marginBottom: 10,
   },
-  subheadline: {
-    fontSize: 15,
+  subline: {
+    fontSize: 14,
+    color: COLORS.grayText,
+    lineHeight: 22,
+    marginBottom: 22,
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    backgroundColor: COLORS.bg,
+    borderRadius: 18,
+    marginBottom: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+  },
+  statCell: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  statCellBorder: {
+    borderRightWidth: 1,
+    borderRightColor: "rgba(0,0,0,0.07)",
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: COLORS.primary,
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: "600",
     color: COLORS.grayText,
     textAlign: "center",
-    lineHeight: 23,
-    marginBottom: 32,
-    paddingHorizontal: 8,
   },
-  chipsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  featureChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: COLORS.peach,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 9999,
-    borderWidth: 1.5,
-    borderColor: COLORS.peachDark,
-  },
-  featureEmoji: {
-    fontSize: 15,
-  },
-  featureLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.primaryDark,
-  },
-  bottom: {
-    paddingHorizontal: 28,
-    paddingBottom: 44,
-    gap: 12,
-  },
-  loginBtn: {
+
+  btns: { gap: 11, marginBottom: 16 },
+
+  primaryBtn: {
     backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    borderRadius: 18,
+    paddingVertical: 17,
+    borderRadius: 16,
     alignItems: "center",
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.32,
-    shadowRadius: 18,
+    shadowRadius: 16,
     elevation: 8,
   },
-  loginBtnText: {
-    color: COLORS.white,
-    fontSize: 17,
+  primaryBtnText: {
+    color: "#fff",
+    fontSize: 16,
     fontWeight: "800",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
-  signupBtn: {
-    backgroundColor: COLORS.white,
-    paddingVertical: 18,
-    borderRadius: 18,
+
+  secondaryBtn: {
+    backgroundColor: "transparent",
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,0,0,0.12)",
   },
-  signupBtnText: {
-    color: COLORS.primary,
-    fontSize: 17,
-    fontWeight: "800",
-    letterSpacing: 0.3,
+  secondaryBtnText: {
+    color: COLORS.textDark,
+    fontSize: 15,
+    fontWeight: "700",
   },
-  termsText: {
+
+  terms: {
     textAlign: "center",
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.grayText,
-    marginTop: 4,
+    lineHeight: 18,
   },
   termsLink: {
     color: COLORS.primary,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });

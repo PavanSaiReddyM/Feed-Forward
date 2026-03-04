@@ -1,69 +1,99 @@
-
 import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Animated,
-  Easing,
-  ScrollView,
+  StyleSheet, Text, View, TextInput, TouchableOpacity,
+  KeyboardAvoidingView, Platform, Animated, Easing,
+  ScrollView, Dimensions,
 } from "react-native";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../_constants/colors";
 
-function FilledInput({ label, value, onChangeText, placeholder, secureTextEntry, right, keyboardType }) {
+const { height } = Dimensions.get("window");
+
+// ─── Reusable Input ────────────────────────────────────────────────────────────
+function Input({ label, icon, value, onChangeText, placeholder,
+  secureTextEntry, keyboardType, rightIcon, onRightPress }) {
   const [focused, setFocused] = useState(false);
-  const borderAnim = useRef(new Animated.Value(0)).current;
+  const lineWidth = useRef(new Animated.Value(0)).current;
 
-  const onFocus = () => {
+  const handleFocus = () => {
     setFocused(true);
-    Animated.timing(borderAnim, { toValue: 1, duration: 200, useNativeDriver: false }).start();
+    Animated.timing(lineWidth, { toValue: 1, duration: 220, useNativeDriver: false }).start();
   };
-  const onBlur = () => {
+  const handleBlur = () => {
     setFocused(false);
-    Animated.timing(borderAnim, { toValue: 0, duration: 200, useNativeDriver: false }).start();
+    Animated.timing(lineWidth, { toValue: 0, duration: 220, useNativeDriver: false }).start();
   };
-
-  const borderColor = borderAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [COLORS.border, COLORS.primary],
-  });
-  const bgColor = borderAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["#F5F5F8", COLORS.primaryGlow],
-  });
 
   return (
-    <View style={styles.inputGroup}>
-      <Text style={[styles.label, focused && styles.labelFocused]}>{label}</Text>
-      <Animated.View
-        style={[
-          styles.inputWrap,
-          { borderColor, backgroundColor: bgColor },
-        ]}
-      >
+    <View style={inp.group}>
+      <Text style={[inp.label, focused && inp.labelActive]}>{label}</Text>
+      <View style={[inp.box, focused && inp.boxFocused]}>
+        <MaterialCommunityIcons
+          name={icon}
+          size={19}
+          color={focused ? COLORS.primary : COLORS.grayText}
+          style={inp.icon}
+        />
         <TextInput
-          style={styles.input}
+          style={inp.field}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={COLORS.placeholder}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
-          onFocus={onFocus}
-          onBlur={onBlur}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           autoCapitalize="none"
         />
-        {right}
-      </Animated.View>
+        {rightIcon && (
+          <TouchableOpacity onPress={onRightPress} style={{ padding: 4 }}>
+            <MaterialCommunityIcons name={rightIcon} size={19} color={COLORS.grayText} />
+          </TouchableOpacity>
+        )}
+      </View>
+      {/* Animated focus underline */}
+      <View style={inp.lineTrack}>
+        <Animated.View
+          style={[
+            inp.lineFill,
+            {
+              width: lineWidth.interpolate({
+                inputRange: [0, 1], outputRange: ["0%", "100%"],
+              }),
+            },
+          ]}
+        />
+      </View>
     </View>
   );
 }
+
+const inp = StyleSheet.create({
+  group: { marginBottom: 20 },
+  label: { fontSize: 12, fontWeight: "700", color: COLORS.grayText, marginBottom: 8, letterSpacing: 0.4, textTransform: "uppercase" },
+  labelActive: { color: COLORS.primary },
+  box: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#F8F8FA",
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13,
+    gap: 10,
+    borderWidth: 1.5, borderColor: "transparent",
+  },
+  boxFocused: { backgroundColor: COLORS.primaryGlow, borderColor: COLORS.primary + "40" },
+  icon: {},
+  field: { flex: 1, fontSize: 15, color: COLORS.textDark },
+  lineTrack: { height: 2, backgroundColor: "#EBEBF0", borderRadius: 1, marginTop: 2, overflow: "hidden" },
+  lineFill: { height: "100%", backgroundColor: COLORS.primary, borderRadius: 1 },
+});
+
+// ─── Role selector quick chip ──────────────────────────────────────────────────
+const ROLES = [
+  { label: "Donor", icon: "🍽️", route: "/donor" },
+  { label: "NGO", icon: "🤝", route: "/ngo" },
+  { label: "Admin", icon: "🛡️", route: "/admin" },
+];
 
 export default function Login() {
   const router = useRouter();
@@ -72,13 +102,13 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(40)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeIn, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(slideUp, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 500, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -87,299 +117,210 @@ export default function Login() {
     setTimeout(() => {
       setLoading(false);
       router.push("/ngo");
-    }, 1200);
+    }, 1400);
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={styles.root}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerBlobTop} />
-        <View style={styles.headerBlobBottom} />
-        <Animated.View style={{ opacity: fadeIn }}>
-          <View style={styles.brandRow}>
-            <View style={styles.brandIcon}>
-              <Text style={{ fontSize: 22 }}>🍃</Text>
-            </View>
-            <Text style={styles.brandName}>Food Saver</Text>
-          </View>
-          <Text style={styles.headerTitle}>Welcome back</Text>
-          <Text style={styles.headerSub}>Sign in to continue making an impact</Text>
-        </Animated.View>
-      </View>
-
-      {/* Card */}
-      <Animated.View
-        style={[styles.card, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
       >
-        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <FilledInput
-            label="Email address"
+        {/* ── TOP HERO STRIP ── */}
+        <View style={styles.hero}>
+          <View style={styles.heroBlob1} />
+          <View style={styles.heroBlob2} />
+
+          {/* Back button */}
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Logo */}
+          <View style={styles.logoWrap}>
+            <View style={styles.logoCircle}>
+              <Text style={{ fontSize: 30 }}>🍃</Text>
+            </View>
+          </View>
+
+          <Text style={styles.heroTitle}>Welcome back!</Text>
+          <Text style={styles.heroSub}>Sign in to continue your impact</Text>
+        </View>
+
+        {/* ── FORM CARD ── */}
+        <Animated.View
+          style={[styles.card, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+        >
+          <Input
+            label="Email"
+            icon="email-outline"
             value={email}
             onChangeText={setEmail}
             placeholder="you@example.com"
             keyboardType="email-address"
           />
 
-          <FilledInput
+          <Input
             label="Password"
+            icon="lock-outline"
             value={password}
             onChangeText={setPassword}
             placeholder="Your password"
             secureTextEntry={!showPassword}
-            right={
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                <MaterialCommunityIcons
-                  name={showPassword ? "eye-outline" : "eye-off-outline"}
-                  size={21}
-                  color={COLORS.grayText}
-                />
-              </TouchableOpacity>
-            }
+            rightIcon={showPassword ? "eye-outline" : "eye-off-outline"}
+            onRightPress={() => setShowPassword(!showPassword)}
           />
 
-          <TouchableOpacity style={styles.forgotRow}>
+          <TouchableOpacity style={styles.forgotBtn}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
-          {/* Sign In */}
+          {/* Sign in button */}
           <TouchableOpacity
-            style={[styles.signInBtn, loading && styles.signInBtnLoading]}
-            activeOpacity={0.85}
+            style={[styles.signInBtn, loading && { opacity: 0.75 }]}
+            activeOpacity={0.86}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
-              <View style={styles.loadingRow}>
-                <MaterialCommunityIcons name="loading" size={20} color={COLORS.white} style={styles.spinner} />
-                <Text style={styles.signInText}>Signing in…</Text>
-              </View>
+              <Text style={styles.signInText}>Signing in…</Text>
             ) : (
-              <Text style={styles.signInText}>Sign In</Text>
+              <>
+                <Text style={styles.signInText}>Sign In</Text>
+                <MaterialCommunityIcons name="arrow-right" size={20} color="#fff" />
+              </>
             )}
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>or continue as</Text>
-            <View style={styles.dividerLine} />
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.divLine} />
+            <Text style={styles.divLabel}>or sign in as</Text>
+            <View style={styles.divLine} />
           </View>
 
-          {/* Role quick links */}
-          <View style={styles.roleRow}>
-            {[
-              { label: "Donor", icon: "🍽️", route: "/donor" },
-              { label: "NGO", icon: "🤝", route: "/ngo" },
-              { label: "Admin", icon: "🛡️", route: "/admin" },
-            ].map((r) => (
+          {/* Role chips */}
+          <View style={styles.rolesRow}>
+            {ROLES.map((r) => (
               <TouchableOpacity
                 key={r.label}
-                style={styles.roleBtn}
+                style={styles.roleChip}
                 onPress={() => router.push(r.route)}
+                activeOpacity={0.8}
               >
                 <Text style={styles.roleEmoji}>{r.icon}</Text>
                 <Text style={styles.roleLabel}>{r.label}</Text>
+                <MaterialCommunityIcons name="arrow-right" size={13} color={COLORS.grayText} />
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.signupText}>
-            Don't have an account?{" "}
-            <Text style={styles.signupLink} onPress={() => router.push("/signup")}>
-              Sign up
-            </Text>
-          </Text>
-        </ScrollView>
-      </Animated.View>
+          {/* Signup link */}
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>New to Food Saver? </Text>
+            <TouchableOpacity onPress={() => router.push("/signup")}>
+              <Text style={styles.signupLink}>Create account →</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  header: {
-    paddingTop: 64,
-    paddingHorizontal: 28,
-    paddingBottom: 36,
+  root: { flex: 1, backgroundColor: COLORS.primary },
+  scroll: { flexGrow: 1 },
+
+  // ── Hero ──────────────────────────────────────────────────────────
+  hero: {
+    paddingTop: Platform.OS === "ios" ? 56 : 44,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
     overflow: "hidden",
+    alignItems: "flex-start",
   },
-  headerBlobTop: {
-    position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: COLORS.primaryLight,
-    opacity: 0.25,
-    top: -80,
-    right: -60,
+  heroBlob1: {
+    position: "absolute", width: 240, height: 240, borderRadius: 120,
+    backgroundColor: "rgba(255,255,255,0.1)", top: -80, right: -60,
   },
-  headerBlobBottom: {
-    position: "absolute",
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: COLORS.primaryDark,
-    opacity: 0.3,
-    bottom: -40,
-    left: -40,
+  heroBlob2: {
+    position: "absolute", width: 140, height: 140, borderRadius: 70,
+    backgroundColor: "rgba(0,0,0,0.12)", bottom: -30, left: -30,
   },
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+  backBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center", alignItems: "center",
     marginBottom: 24,
   },
-  brandIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  logoWrap: { marginBottom: 20 },
+  logoCircle: {
+    width: 64, height: 64, borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "center", alignItems: "center",
+    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)",
   },
-  brandName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.9)",
+  heroTitle: {
+    fontSize: 30, fontWeight: "800", color: "#fff",
+    letterSpacing: -0.5, marginBottom: 6,
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: COLORS.white,
-    letterSpacing: -0.5,
-    marginBottom: 6,
-  },
-  headerSub: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.75)",
-  },
+  heroSub: { fontSize: 15, color: "rgba(255,255,255,0.72)" },
+
+  // ── Card ──────────────────────────────────────────────────────────
   card: {
     flex: 1,
-    backgroundColor: COLORS.bg,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    padding: 28,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
     paddingTop: 32,
+    paddingBottom: 32,
+    minHeight: height * 0.62,
   },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.grayText,
-    marginBottom: 8,
-    letterSpacing: 0.2,
-  },
-  labelFocused: {
-    color: COLORS.primary,
-  },
-  inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 14,
-    borderWidth: 1.5,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: COLORS.textDark,
-  },
-  forgotRow: {
-    alignItems: "flex-end",
-    marginBottom: 28,
-    marginTop: -6,
-  },
-  forgotText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.primary,
-  },
+
+  forgotBtn: { alignSelf: "flex-end", marginTop: -8, marginBottom: 24 },
+  forgotText: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
+
   signInBtn: {
     backgroundColor: COLORS.primary,
-    paddingVertical: 18,
-    borderRadius: 18,
-    alignItems: "center",
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 8,
-    marginBottom: 24,
-  },
-  signInBtnLoading: {
-    opacity: 0.8,
-  },
-  loadingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-  },
-  spinner: {
-    opacity: 0.9,
-  },
-  signInText: {
-    color: COLORS.white,
-    fontSize: 17,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.border,
-  },
-  dividerLabel: {
-    fontSize: 12,
-    color: COLORS.grayText,
-    fontWeight: "600",
-  },
-  roleRow: {
-    flexDirection: "row",
+    justifyContent: "center",
     gap: 10,
+    paddingVertical: 17,
+    borderRadius: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    elevation: 8,
     marginBottom: 28,
   },
-  roleBtn: {
-    flex: 1,
-    alignItems: "center",
-    backgroundColor: COLORS.white,
-    paddingVertical: 14,
+  signInText: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: 0.2 },
+
+  divider: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 },
+  divLine: { flex: 1, height: 1, backgroundColor: "#EBEBF0" },
+  divLabel: { fontSize: 12, fontWeight: "600", color: COLORS.grayText },
+
+  rolesRow: { gap: 10, marginBottom: 28 },
+  roleChip: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: COLORS.bg,
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    gap: 4,
+    paddingVertical: 13, paddingHorizontal: 16,
+    gap: 12,
+    borderWidth: 1.5, borderColor: "rgba(0,0,0,0.06)",
   },
-  roleEmoji: {
-    fontSize: 22,
-  },
-  roleLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textMid,
-  },
-  signupText: {
-    textAlign: "center",
-    fontSize: 14,
-    color: COLORS.grayText,
-    paddingBottom: 20,
-  },
-  signupLink: {
-    color: COLORS.primary,
-    fontWeight: "800",
-  },
+  roleEmoji: { fontSize: 20 },
+  roleLabel: { flex: 1, fontSize: 14, fontWeight: "700", color: COLORS.textDark },
+
+  signupRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
+  signupText: { fontSize: 14, color: COLORS.grayText },
+  signupLink: { fontSize: 14, fontWeight: "800", color: COLORS.primary },
 });
