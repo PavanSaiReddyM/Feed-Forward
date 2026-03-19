@@ -1,4 +1,3 @@
-
 import {
     StyleSheet, Text, View, FlatList,
     TouchableOpacity,
@@ -19,17 +18,26 @@ export default function Complaints() {
     const [activeTab, setActiveTab] = useState("All");
     const [complaints, setComplaints] = useState([
         {
+            id: "0", userName: "Pavan Moola", role: "Donor", initials: "PM",
+            category: "Pickup Issue",
+            message: "NGO did not arrive for the scheduled pickup and I received no prior notification. The food has now expired.",
+            date: "5 Mar 2026", status: "Pending", severity: "high",
+        },
+        {
             id: "1", userName: "Ravi Kumar", role: "Donor", initials: "RK",
+            category: "Pickup Issue",
             message: "NGO did not arrive for pickup on time and food expired.",
             date: "12 Feb 2026", status: "Pending", severity: "high",
         },
         {
             id: "2", userName: "Helping Hands NGO", role: "NGO", initials: "HH",
+            category: "Food Quality",
             message: "Food quality was not suitable for distribution.",
             date: "10 Feb 2026", status: "Pending", severity: "medium",
         },
         {
             id: "3", userName: "Fresh Bakery", role: "Donor", initials: "FB",
+            category: "Rude Behavior",
             message: "Volunteer was rude and didn't follow handling instructions.",
             date: "8 Feb 2026", status: "Resolved", severity: "low",
         },
@@ -105,6 +113,12 @@ export default function Complaints() {
                                 </View>
 
                                 {/* Message */}
+                                {item.category && (
+                                    <View style={styles.categoryBadge}>
+                                        <MaterialCommunityIcons name="tag-outline" size={11} color={COLORS.primary} />
+                                        <Text style={styles.categoryBadgeText}>{item.category}</Text>
+                                    </View>
+                                )}
                                 <Text style={[styles.message, isResolved && styles.messageResolved]}>{item.message}</Text>
 
                                 {/* Footer */}
@@ -203,6 +217,14 @@ const styles = StyleSheet.create({
     sevText: { fontSize: 11, fontWeight: "800" },
     message: { fontSize: 14, color: COLORS.textMid, lineHeight: 21, marginBottom: 14 },
     messageResolved: { color: COLORS.grayText },
+    categoryBadge: {
+        flexDirection: "row", alignItems: "center", gap: 5,
+        alignSelf: "flex-start",
+        backgroundColor: COLORS.primaryGlow,
+        paddingVertical: 4, paddingHorizontal: 10, borderRadius: 9999,
+        marginBottom: 8,
+    },
+    categoryBadgeText: { fontSize: 11, fontWeight: "700", color: COLORS.primary },
     cardFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     dateRow: { flexDirection: "row", alignItems: "center", gap: 5 },
     dateText: { fontSize: 12, color: COLORS.grayText },

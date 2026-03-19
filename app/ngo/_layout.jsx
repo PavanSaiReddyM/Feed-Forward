@@ -97,6 +97,10 @@ export default function NgoLayout() {
                     ),
                 }}
             />
+            <Tabs.Screen
+                name="pickup-map"
+                options={{ href: null }}
+            />
         </Tabs>
     );
 }

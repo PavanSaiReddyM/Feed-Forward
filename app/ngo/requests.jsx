@@ -1,202 +1,222 @@
-
-
-
-
 import {
     StyleSheet, Text, View, FlatList,
-    TouchableOpacity, Animated,
+    TouchableOpacity, Animated, Platform, Alert,
 } from "react-native";
-import { useState, useRef } from "react";
+import { useRef, useEffect, useState } from "react";
+import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
 
-const requests = [
+const REQUESTS = [
     {
-        id: "1", food: "Rice & Curry", donor: "ABC Restaurant",
-        status: "Pending", quantity: "10kg", requestedOn: "12 Feb 2026",
-        steps: 1,
+        id: "1", food: "Dal Makhani & Roti", donor: "Moti Mahal Restaurant", qty: "12 kg",
+        category: "Cooked Meal", date: "Mar 19, 2026", deadline: "5:00 PM today",
+        status: "Approved", location: "Connaught Place, Delhi",
+        donorLocation: { latitude: 28.6315, longitude: 77.2167 },
     },
     {
-        id: "2", food: "Bread Packets", donor: "Fresh Bakery",
-        status: "Approved", quantity: "20 pcs", requestedOn: "11 Feb 2026",
-        steps: 2,
+        id: "2", food: "Fresh Bread Loaves", donor: "Delhi Bakers", qty: "20 pcs",
+        category: "Bakery", date: "Mar 19, 2026", deadline: "6:00 PM today",
+        status: "Pending", location: "Karol Bagh, Delhi",
+        donorLocation: { latitude: 28.6519, longitude: 77.1909 },
     },
     {
-        id: "3", food: "Fresh Vegetables", donor: "Green Market",
-        status: "In Transit", quantity: "15kg", requestedOn: "10 Feb 2026",
-        steps: 3,
+        id: "3", food: "Mixed Vegetables", donor: "INA Sabzi Wala", qty: "8 kg",
+        category: "Produce", date: "Mar 18, 2026", deadline: "Completed",
+        status: "Collected", location: "INA Market, Delhi",
+        donorLocation: { latitude: 28.5733, longitude: 77.2090 },
     },
     {
-        id: "4", food: "Veg Biryani", donor: "Royal Hotel",
-        status: "Completed", quantity: "25kg", requestedOn: "8 Feb 2026",
-        steps: 4,
+        id: "4", food: "Biryani (Event Pack)", donor: "Spice Route Caterers", qty: "15 kg",
+        category: "Cooked Meal", date: "Mar 18, 2026", deadline: "Expired",
+        status: "Cancelled", location: "Lajpat Nagar, Delhi",
+        donorLocation: { latitude: 28.5677, longitude: 77.2433 },
     },
 ];
 
-const STATUS_CONFIG = {
-    Pending: { icon: "clock-outline", color: COLORS.warning, bg: COLORS.warningLight },
-    Approved: { icon: "check-circle-outline", color: COLORS.accentBlue, bg: COLORS.accentBlueLight },
-    "In Transit": { icon: "truck-delivery-outline", color: COLORS.primary, bg: COLORS.primaryGlow },
-    Completed: { icon: "checkbox-marked-circle-outline", color: COLORS.success, bg: COLORS.successLight },
+const STATUS_CFG = {
+    Pending: { color: "#F59E0B", bg: "#FFF8EB", icon: "clock-outline", label: "Pending Approval" },
+    Approved: { color: "#2B7FFF", bg: "#EBF2FF", icon: "check-circle-outline", label: "Approved" },
+    Collected: { color: "#2D6A4F", bg: "#EAF5EF", icon: "package-variant-closed", label: "Collected" },
+    Cancelled: { color: "#EF4444", bg: "#FEF2F2", icon: "close-circle-outline", label: "Cancelled" },
 };
 
-const TABS = ["All", "Pending", "Approved", "Completed"];
+const CAT_STYLE = {
+    "Cooked Meal": { color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
+    "Bakery": { color: "#F59E0B", bg: "#FFF8EB", icon: "bread-slice-outline" },
+    "Produce": { color: "#2D6A4F", bg: "#EAF5EF", icon: "leaf" },
+};
 
-const TIMELINE_STEPS = [
-    { icon: "clipboard-plus-outline", label: "Posted" },
-    { icon: "check-circle-outline", label: "Approved" },
-    { icon: "truck-delivery-outline", label: "In Transit" },
-    { icon: "package-variant-closed-check", label: "Collected" },
-];
+const FILTERS = ["All", "Pending", "Approved", "Collected", "Cancelled"];
 
-function TimelineTracker({ currentStep }) {
+function RequestCard({ item, index }) {
+    const router = useRouter();
+    const fade = useRef(new Animated.Value(0)).current;
+    const slide = useRef(new Animated.Value(24)).current;
+    const sc = STATUS_CFG[item.status];
+    const cat = CAT_STYLE[item.category] || { color: COLORS.primary, bg: "#FFF0EB", icon: "food-variant" };
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fade, { toValue: 1, duration: 400, delay: index * 80, useNativeDriver: true }),
+            Animated.timing(slide, { toValue: 0, duration: 400, delay: index * 80, useNativeDriver: true }),
+        ]).start();
+    }, []);
+
+    const handleCancel = () =>
+        Alert.alert("Cancel Request", `Cancel your request for "${item.food}"?`, [
+            { text: "Keep it", style: "cancel" },
+            { text: "Cancel", style: "destructive" },
+        ]);
+
+    const navigateToMap = () =>
+        router.push({
+            pathname: "/ngo/pickup-map",
+            params: {
+                pickupId: item.id, foodName: item.food, donor: item.donor,
+                address: item.location, deadline: item.deadline,
+                latitude: item.donorLocation.latitude, longitude: item.donorLocation.longitude,
+            },
+        });
+
     return (
-        <View style={styles.timelineWrap}>
-            {TIMELINE_STEPS.map((step, i) => {
-                const done = i < currentStep;
-                const active = i === currentStep - 1;
-                return (
-                    <View key={i} style={styles.timelineStep}>
-                        <View
-                            style={[
-                                styles.timelineCircle,
-                                done && styles.timelineCircleDone,
-                                active && styles.timelineCircleActive,
-                            ]}
-                        >
-                            <MaterialCommunityIcons
-                                name={step.icon}
-                                size={13}
-                                color={done || active ? COLORS.white : COLORS.placeholder}
-                            />
-                        </View>
-                        <Text style={[styles.timelineLabel, (done || active) && styles.timelineLabelActive]}>
-                            {step.label}
-                        </Text>
-                        {i < TIMELINE_STEPS.length - 1 && (
-                            <View style={[styles.timelineLine, done && styles.timelineLineDone]} />
-                        )}
+        <Animated.View style={[styles.card, { opacity: fade, transform: [{ translateY: slide }] }]}>
+
+            {/* Status accent bar */}
+            <View style={[styles.accentBar, { backgroundColor: sc.color }]} />
+
+            <View style={styles.cardBody}>
+                {/* Top row */}
+                <View style={styles.cardTop}>
+                    <View style={[styles.catIcon, { backgroundColor: cat.bg }]}>
+                        <MaterialCommunityIcons name={cat.icon} size={22} color={cat.color} />
                     </View>
-                );
-            })}
-        </View>
-    );
-}
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.foodName}>{item.food}</Text>
+                        <View style={styles.metaRow}>
+                            <MaterialCommunityIcons name="store-outline" size={12} color={COLORS.grayText} />
+                            <Text style={styles.metaText}>{item.donor}</Text>
+                        </View>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
+                        <MaterialCommunityIcons name={sc.icon} size={12} color={sc.color} />
+                        <Text style={[styles.statusText, { color: sc.color }]}>{item.status}</Text>
+                    </View>
+                </View>
 
-function RequestCard({ item }) {
-    const cfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.Pending;
-    const isCompleted = item.status === "Completed";
-    const isApproved = item.status === "Approved";
-    const isTransit = item.status === "In Transit";
+                {/* Info grid */}
+                <View style={styles.infoGrid}>
+                    {[
+                        { icon: "weight-kilogram", text: item.qty, color: COLORS.primary },
+                        { icon: "tag-outline", text: item.category, color: COLORS.primary },
+                        { icon: "map-marker-outline", text: item.location, color: "#7C3AED" },
+                        { icon: "timer-outline", text: item.deadline, color: item.deadline === "Expired" ? "#EF4444" : "#F59E0B" },
+                    ].map((info, i) => (
+                        <View key={i} style={styles.infoChip}>
+                            <MaterialCommunityIcons name={info.icon} size={12} color={info.color} />
+                            <Text style={styles.infoText} numberOfLines={1}>{info.text}</Text>
+                        </View>
+                    ))}
+                </View>
 
-    return (
-        <View style={[styles.card, isCompleted && styles.cardCompleted]}>
-            {/* Header */}
-            <View style={styles.cardHeader}>
-                <View style={[styles.foodIcon, { backgroundColor: cfg.bg }]}>
-                    <MaterialCommunityIcons name="food" size={22} color={cfg.color} />
-                </View>
-                <View style={styles.foodInfo}>
-                    <Text style={styles.foodName}>{item.food}</Text>
-                    <Text style={styles.foodQty}>{item.quantity}</Text>
-                </View>
-                <View style={[styles.statusChip, { backgroundColor: cfg.bg }]}>
-                    <MaterialCommunityIcons name={cfg.icon} size={13} color={cfg.color} />
-                    <Text style={[styles.statusText, { color: cfg.color }]}>{item.status}</Text>
-                </View>
+                {/* Actions */}
+                {item.status === "Approved" && (
+                    <View style={styles.actionRow}>
+                        <TouchableOpacity style={styles.mapBtn} onPress={navigateToMap} activeOpacity={0.85}>
+                            <MaterialCommunityIcons name="map-marker-radius-outline" size={16} color={COLORS.success} />
+                            <Text style={styles.mapBtnText}>View on Map</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.8}>
+                            <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+                {item.status === "Pending" && (
+                    <View style={styles.actionRow}>
+                        <View style={styles.waitingBanner}>
+                            <MaterialCommunityIcons name="clock-outline" size={14} color="#F59E0B" />
+                            <Text style={styles.waitingText}>Waiting for donor approval</Text>
+                        </View>
+                        <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.8}>
+                            <MaterialCommunityIcons name="close" size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                )}
+                {item.status === "Collected" && (
+                    <View style={styles.doneBanner}>
+                        <MaterialCommunityIcons name="check-circle" size={15} color="#2D6A4F" />
+                        <Text style={styles.doneText}>Pickup completed · {item.date}</Text>
+                    </View>
+                )}
             </View>
-
-            <View style={styles.divider} />
-
-            {/* Info */}
-            <View style={styles.infoRow}>
-                <View style={styles.infoItem}>
-                    <MaterialCommunityIcons name="store" size={14} color={COLORS.grayText} />
-                    <Text style={styles.infoText}>{item.donor}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                    <MaterialCommunityIcons name="calendar-outline" size={14} color={COLORS.grayText} />
-                    <Text style={styles.infoText}>{item.requestedOn}</Text>
-                </View>
-            </View>
-
-            {/* Timeline tracker */}
-            <TimelineTracker currentStep={item.steps} />
-
-            {/* Action row */}
-            {(isApproved || isTransit) && (
-                <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.navigateBtn}>
-                        <MaterialCommunityIcons name="map-marker-radius-outline" size={16} color={COLORS.white} />
-                        <Text style={styles.navigateBtnText}>Navigate to Pickup</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.cancelBtn}>
-                        <MaterialCommunityIcons name="close" size={16} color={COLORS.error} />
-                    </TouchableOpacity>
-                </View>
-            )}
-        </View>
+        </Animated.View>
     );
 }
 
 export default function Requests() {
-    const [activeTab, setActiveTab] = useState("All");
-    const indicatorX = useRef(new Animated.Value(0)).current;
+    const [filter, setFilter] = useState("All");
+    const filtered = filter === "All" ? REQUESTS : REQUESTS.filter(r => r.status === filter);
 
-    const filtered = requests.filter((r) => {
-        if (activeTab === "All") return true;
-        if (activeTab === "Completed") return r.status === "Completed";
-        return r.status === activeTab;
-    });
-
-    const handleTabChange = (tab, index) => {
-        setActiveTab(tab);
-        Animated.spring(indicatorX, {
-            toValue: index * (100 / TABS.length),
-            tension: 60, friction: 10, useNativeDriver: false,
-        }).start();
+    const counts = {
+        Pending: REQUESTS.filter(r => r.status === "Pending").length,
+        Approved: REQUESTS.filter(r => r.status === "Approved").length,
+        Collected: REQUESTS.filter(r => r.status === "Collected").length,
     };
 
     return (
-        <View style={styles.container}>
+        <View style={styles.root}>
+
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.title}>My Requests</Text>
-                <Text style={styles.subtitle}>Track your food requests</Text>
-            </View>
+                <View style={styles.headerBlob} />
+                <Text style={styles.headerLabel}>NGO Portal</Text>
+                <Text style={styles.headerTitle}>My Requests</Text>
 
-            {/* Tabs */}
-            <View style={styles.tabsWrap}>
-                <View style={styles.tabs}>
-                    {TABS.map((tab, i) => (
-                        <TouchableOpacity
-                            key={tab}
-                            style={styles.tab}
-                            onPress={() => handleTabChange(tab, i)}
-                        >
-                            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-                        </TouchableOpacity>
+                {/* Stats */}
+                <View style={styles.statsRow}>
+                    {[
+                        { label: "Pending", value: counts.Pending, color: "#F59E0B" },
+                        { label: "Approved", value: counts.Approved, color: "#2B7FFF" },
+                        { label: "Collected", value: counts.Collected, color: "#2D6A4F" },
+                    ].map(s => (
+                        <View key={s.label} style={styles.statPill}>
+                            <Text style={[styles.statNum, { color: s.color }]}>{s.value}</Text>
+                            <Text style={styles.statLabel}>{s.label}</Text>
+                        </View>
                     ))}
                 </View>
-                <Animated.View
-                    style={[
-                        styles.tabIndicator,
-                        { left: indicatorX.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] }) },
-                    ]}
+            </View>
+
+            {/* Filter tabs */}
+            <View style={styles.filterWrap}>
+                <FlatList
+                    data={FILTERS}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 18, gap: 8 }}
+                    keyExtractor={f => f}
+                    renderItem={({ item: f }) => (
+                        <TouchableOpacity
+                            style={[styles.filterChip, filter === f && styles.filterChipActive]}
+                            onPress={() => setFilter(f)} activeOpacity={0.8}>
+                            <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>{f}</Text>
+                        </TouchableOpacity>
+                    )}
                 />
             </View>
 
-            {/* List */}
+            {/* Cards */}
             <FlatList
                 data={filtered}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <RequestCard item={item} />}
-                contentContainerStyle={styles.listContent}
+                keyExtractor={r => r.id}
+                contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 6 }}
                 showsVerticalScrollIndicator={false}
+                renderItem={({ item, index }) => <RequestCard item={item} index={index} />}
                 ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyEmoji}>📋</Text>
-                        <Text style={styles.emptyTitle}>No requests here</Text>
+                    <View style={styles.empty}>
+                        <MaterialCommunityIcons name="clipboard-list-outline" size={52} color={COLORS.grayText} />
+                        <Text style={styles.emptyTitle}>No requests found</Text>
+                        <Text style={styles.emptySub}>Browse Available Food to make a request</Text>
                     </View>
                 }
             />
@@ -205,75 +225,53 @@ export default function Requests() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.bg },
-    header: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 16 },
-    title: { fontSize: 26, fontWeight: "800", color: COLORS.textDark, letterSpacing: -0.3 },
-    subtitle: { fontSize: 13, color: COLORS.grayText, marginTop: 3 },
-    tabsWrap: {
-        marginHorizontal: 22, marginBottom: 16,
-        backgroundColor: COLORS.white, borderRadius: 14,
-        overflow: "hidden",
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+    root: { flex: 1, backgroundColor: "#F5F0EB" },
+
+    header: {
+        backgroundColor: "#2B7FFF", paddingTop: Platform.OS === "ios" ? 58 : 44,
+        paddingHorizontal: 22, paddingBottom: 26, overflow: "hidden",
+        borderBottomLeftRadius: 28, borderBottomRightRadius: 28, marginBottom: 14,
+        shadowColor: "#2B7FFF", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.28, shadowRadius: 16, elevation: 10,
     },
-    tabs: { flexDirection: "row" },
-    tab: { flex: 1, paddingVertical: 12, alignItems: "center" },
-    tabText: { fontSize: 12, fontWeight: "700", color: COLORS.grayText },
-    tabTextActive: { color: COLORS.primary },
-    tabIndicator: {
-        position: "absolute", bottom: 0,
-        width: `${100 / TABS.length}%`, height: 3,
-        backgroundColor: COLORS.primary, borderRadius: 2,
-    },
-    listContent: { paddingHorizontal: 22, paddingBottom: 24 },
-    card: {
-        backgroundColor: COLORS.white, borderRadius: 20, marginBottom: 14, padding: 18,
-        shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3,
-    },
-    cardCompleted: { opacity: 0.75 },
-    cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-    foodIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: "center", alignItems: "center", marginRight: 12 },
-    foodInfo: { flex: 1 },
-    foodName: { fontSize: 16, fontWeight: "800", color: COLORS.textDark, marginBottom: 2 },
-    foodQty: { fontSize: 13, color: COLORS.grayText, fontWeight: "600" },
-    statusChip: {
-        flexDirection: "row", alignItems: "center", gap: 4,
-        paddingVertical: 5, paddingHorizontal: 10, borderRadius: 9999,
-    },
+    headerBlob: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "#fff", opacity: 0.06, top: -50, right: -40 },
+    headerLabel: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 },
+    headerTitle: { fontSize: 26, fontWeight: "800", color: "#fff", letterSpacing: -0.5, marginBottom: 18 },
+    statsRow: { flexDirection: "row", gap: 10 },
+    statPill: { flex: 1, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 14, paddingVertical: 10, alignItems: "center", gap: 3 },
+    statNum: { fontSize: 20, fontWeight: "800" },
+    statLabel: { fontSize: 10, color: "rgba(255,255,255,0.65)", fontWeight: "600" },
+
+    filterWrap: { paddingVertical: 12 },
+    filterChip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 9999, backgroundColor: "#fff", borderWidth: 1.5, borderColor: "#E5E7EB" },
+    filterChipActive: { backgroundColor: "#2B7FFF", borderColor: "#2B7FFF" },
+    filterChipText: { fontSize: 13, fontWeight: "600", color: COLORS.grayText },
+    filterChipTextActive: { color: "#fff", fontWeight: "800" },
+
+    card: { backgroundColor: "#fff", borderRadius: 20, marginBottom: 14, flexDirection: "row", overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3 },
+    accentBar: { width: 4 },
+    cardBody: { flex: 1, padding: 16 },
+    cardTop: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+    catIcon: { width: 44, height: 44, borderRadius: 13, justifyContent: "center", alignItems: "center" },
+    foodName: { fontSize: 15, fontWeight: "800", color: COLORS.textDark, marginBottom: 3 },
+    metaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+    metaText: { fontSize: 12, color: COLORS.grayText, fontWeight: "500" },
+    statusBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9 },
     statusText: { fontSize: 11, fontWeight: "800" },
-    divider: { height: 1, backgroundColor: "#F5F5F5", marginBottom: 12 },
-    infoRow: { flexDirection: "row", gap: 20, marginBottom: 14 },
-    infoItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-    infoText: { fontSize: 13, color: COLORS.grayText, fontWeight: "500" },
-    timelineWrap: { flexDirection: "row", alignItems: "flex-start", marginBottom: 14 },
-    timelineStep: { flex: 1, alignItems: "center", position: "relative" },
-    timelineCircle: {
-        width: 28, height: 28, borderRadius: 14,
-        backgroundColor: "#EBEBF0", justifyContent: "center", alignItems: "center",
-        marginBottom: 4,
-    },
-    timelineCircleDone: { backgroundColor: COLORS.success },
-    timelineCircleActive: { backgroundColor: COLORS.primary },
-    timelineLabel: { fontSize: 9, color: COLORS.placeholder, fontWeight: "700", textAlign: "center" },
-    timelineLabelActive: { color: COLORS.primary },
-    timelineLine: {
-        position: "absolute", top: 13, right: "-50%",
-        width: "100%", height: 2, backgroundColor: "#EBEBF0",
-    },
-    timelineLineDone: { backgroundColor: COLORS.success },
-    actionRow: { flexDirection: "row", gap: 10, marginTop: 4 },
-    navigateBtn: {
-        flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-        gap: 8, backgroundColor: COLORS.accentBlue,
-        paddingVertical: 12, borderRadius: 12,
-        shadowColor: COLORS.accentBlue, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4,
-    },
-    navigateBtnText: { color: COLORS.white, fontWeight: "800", fontSize: 14 },
-    cancelBtn: {
-        width: 44, height: 44, borderRadius: 12,
-        backgroundColor: COLORS.errorLight,
-        justifyContent: "center", alignItems: "center",
-    },
-    emptyState: { alignItems: "center", paddingVertical: 60 },
-    emptyEmoji: { fontSize: 48, marginBottom: 12 },
-    emptyTitle: { fontSize: 17, fontWeight: "800", color: COLORS.textDark },
+
+    infoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 12 },
+    infoChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F7F7FA", paddingVertical: 5, paddingHorizontal: 9, borderRadius: 8 },
+    infoText: { fontSize: 11, color: COLORS.grayText, fontWeight: "600", maxWidth: 130 },
+
+    actionRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+    mapBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 12, backgroundColor: "#EAF5EF", borderWidth: 1, borderColor: COLORS.success + "30" },
+    mapBtnText: { fontSize: 13, fontWeight: "800", color: COLORS.success },
+    cancelBtn: { width: 38, height: 38, borderRadius: 11, backgroundColor: "#FEF2F2", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#FECACA" },
+    waitingBanner: { flex: 1, flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#FFF8EB", paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12 },
+    waitingText: { fontSize: 12, fontWeight: "700", color: "#F59E0B" },
+    doneBanner: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#EAF5EF", paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12 },
+    doneText: { fontSize: 12, fontWeight: "700", color: "#2D6A4F" },
+
+    empty: { alignItems: "center", paddingVertical: 60, gap: 10 },
+    emptyTitle: { fontSize: 16, fontWeight: "800", color: COLORS.textDark },
+    emptySub: { fontSize: 13, color: COLORS.grayText, textAlign: "center" },
 });

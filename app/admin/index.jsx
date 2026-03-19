@@ -1,229 +1,621 @@
-
-
-
 import {
     StyleSheet, Text, View, ScrollView, TouchableOpacity,
-    Modal, FlatList, Animated,
+    Modal, FlatList, Animated, Easing, Platform, Alert,
 } from "react-native";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
 
-const notifications = [
-    { id: "1", title: "New NGO Registration", message: "Green Earth Foundation has requested verification.", time: "10 min ago", unread: true, icon: "office-building", color: COLORS.primary },
-    { id: "2", title: "Large Donation Alert", message: "500kg of rice donated by Tech Corp.", time: "1 hour ago", unread: true, icon: "food-turkey", color: COLORS.success },
-    { id: "3", title: "System Report Ready", message: "Weekly activity report is ready for review.", time: "5 hours ago", unread: false, icon: "file-chart", color: COLORS.accentBlue },
-    { id: "4", title: "User Flagged", message: "Suspicious activity reported for User #1234.", time: "1 day ago", unread: false, icon: "alert-circle", color: COLORS.warning },
+// ─── Data ─────────────────────────────────────────────────────────────────────
+const KPI = [
+    { id: "meals", label: "Meals Saved", value: "15,420", delta: "+22%", up: true, icon: "food-variant", color: "#FF6B2B", bg: "#FFF0EB" },
+    { id: "donors", label: "Active Donors", value: "312", delta: "+8%", up: true, icon: "account-heart", color: "#2B7FFF", bg: "#EBF2FF" },
+    { id: "ngos", label: "Verified NGOs", value: "45", delta: "+3", up: true, icon: "domain", color: "#2D6A4F", bg: "#EAF5EF" },
+    { id: "pending", label: "Pending Review", value: "7", delta: "+2", up: false, icon: "clock-alert-outline", color: "#F59E0B", bg: "#FFF8EB" },
 ];
 
-// Simple SVG-like sparkline using View bars
-function Sparkline({ data, color }) {
+const WEEKLY = {
+    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    meals: [820, 1100, 760, 1340, 1560, 1200, 1890],
+    donors: [18, 24, 15, 31, 28, 22, 35],
+    revenue: [0, 0, 0, 0, 0, 0, 0],  // free platform
+};
+
+const TOP_DONORS = [
+    { rank: 1, name: "Taj Hotels Group", meals: 2840, trend: "+18%", up: true },
+    { rank: 2, name: "BigBasket Delhi", meals: 1920, trend: "+12%", up: true },
+    { rank: 3, name: "Moti Mahal", meals: 1340, trend: "+5%", up: true },
+    { rank: 4, name: "ITC Hotels", meals: 980, trend: "-3%", up: false },
+    { rank: 5, name: "Haldiram's Pvt Ltd", meals: 760, trend: "+9%", up: true },
+];
+
+const TOP_NGOS = [
+    { rank: 1, name: "Helping Hands NGO", pickups: 148, city: "Delhi" },
+    { rank: 2, name: "Green Earth Found.", pickups: 112, city: "Mumbai" },
+    { rank: 3, name: "Akshaya Patra", pickups: 98, city: "Bengaluru" },
+    { rank: 4, name: "Robin Hood Army", pickups: 76, city: "Hyderabad" },
+    { rank: 5, name: "Zomato Feeding Ind.", pickups: 64, city: "Chennai" },
+];
+
+const ACTIVITY = [
+    { icon: "shield-check", color: "#2D6A4F", title: "NGO verified — Green Earth Foundation", time: "12 min ago" },
+    { icon: "alert-circle", color: "#F59E0B", title: "Complaint flagged — User #1284 reported", time: "45 min ago" },
+    { icon: "account-plus", color: "#2B7FFF", title: "New donor registered — Taj Hotel Chandigarh", time: "1 hr ago" },
+    { icon: "food-variant", color: "#FF6B2B", title: "Large donation posted — 500 kg Rice (Haldirams)", time: "2 hr ago" },
+    { icon: "close-circle", color: "#EF4444", title: "Donation expired — Bread Packets (Fresh Bakers)", "time": "3 hr ago" },
+    { icon: "account-check", color: "#2D6A4F", title: "Donor KYC approved — Spice Garden Delhi", time: "5 hr ago" },
+];
+
+const NOTIFICATIONS = [
+    { id: "1", title: "NGO Verification Request", msg: "Green Earth Foundation submitted documents.", time: "10 min", unread: true, icon: "domain", color: "#FF6B2B" },
+    { id: "2", title: "Large Donation Alert", msg: "500 kg rice posted by Tech Corp.", time: "1 hr", unread: true, icon: "food-variant", color: "#2D6A4F" },
+    { id: "3", title: "Weekly Report Ready", msg: "Analytics report for this week is ready.", time: "5 hr", unread: false, icon: "file-chart", color: "#2B7FFF" },
+    { id: "4", title: "User Flagged", msg: "Suspicious login for User #1234.", time: "1 day", unread: false, icon: "alert-circle", color: "#F59E0B" },
+];
+
+const TABS = ["Overview", "Donations", "Users & NGOs"];
+
+// ─── Bar Chart ────────────────────────────────────────────────────────────────
+// Each bar grows up with staggered spring. Last bar gets full color + shadow.
+// Dashed avg line sits behind bars. Value labels pop in above each bar.
+function BarChart({ data, labels, color }) {
     const max = Math.max(...data);
+    const avg = Math.round(data.reduce((a, b) => a + b, 0) / data.length);
+    const anims = useRef(data.map(() => new Animated.Value(0))).current;
+
+    useEffect(() => {
+        Animated.stagger(55,
+            anims.map(a =>
+                Animated.spring(a, { toValue: 1, tension: 52, friction: 9, useNativeDriver: false })
+            )
+        ).start();
+    }, []);
+
     return (
-        <View style={styles.sparkline}>
+        <View style={chart.root}>
+            {/* Y-axis ghost lines */}
+            {[0.25, 0.5, 0.75, 1].map(pct => (
+                <View key={pct} style={[chart.gridLine, { bottom: `${pct * 100}%` }]}>
+                    <Text style={chart.gridLabel}>
+                        {Math.round(max * pct) >= 1000 ? `${(max * pct / 1000).toFixed(1)}k` : Math.round(max * pct)}
+                    </Text>
+                </View>
+            ))}
+
+            {/* Avg dashed line */}
+            <View style={[chart.avgLine, { bottom: `${(avg / max) * 100}%` }]}>
+                <View style={chart.avgDash} />
+                <Text style={chart.avgText}>avg</Text>
+            </View>
+
+            {/* Bars */}
+            <View style={chart.barsRow}>
+                {data.map((v, i) => {
+                    const isLast = i === data.length - 1;
+                    const heightPct = anims[i].interpolate({ inputRange: [0, 1], outputRange: ["0%", `${(v / max) * 100}%`] });
+                    const opacityVal = anims[i].interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+                    return (
+                        <View key={i} style={chart.colWrap}>
+                            {/* Value label */}
+                            <Animated.Text style={[chart.valLabel, { opacity: opacityVal }, isLast && { color, fontWeight: "800" }]}>
+                                {v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
+                            </Animated.Text>
+                            {/* Bar track */}
+                            <View style={chart.barTrack}>
+                                <Animated.View style={[
+                                    chart.bar,
+                                    { height: heightPct, backgroundColor: isLast ? color : color + "60" },
+                                    isLast && { shadowColor: color, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 },
+                                ]} />
+                            </View>
+                            {/* Day label */}
+                            <Text style={[chart.dayLabel, isLast && { color, fontWeight: "800" }]}>{labels[i]}</Text>
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+}
+
+const chart = StyleSheet.create({
+    root: { height: 160, position: "relative", marginTop: 8, marginBottom: 4 },
+    gridLine: { position: "absolute", left: 0, right: 0, flexDirection: "row", alignItems: "center" },
+    gridLabel: { fontSize: 8, color: COLORS.grayText, width: 28, textAlign: "right", marginRight: 6, opacity: 0.7 },
+    avgLine: { position: "absolute", left: 32, right: 0, flexDirection: "row", alignItems: "center", zIndex: 3 },
+    avgDash: { flex: 1, height: 1, borderTopWidth: 1.5, borderColor: COLORS.grayText, borderStyle: "dashed", opacity: 0.3 },
+    avgText: { fontSize: 8, color: COLORS.grayText, opacity: 0.6, marginLeft: 4 },
+    barsRow: { position: "absolute", left: 34, right: 0, top: 0, bottom: 22, flexDirection: "row", alignItems: "flex-end", gap: 5 },
+    colWrap: { flex: 1, height: "100%", justifyContent: "flex-end", alignItems: "center" },
+    valLabel: { fontSize: 9, fontWeight: "600", color: COLORS.grayText, marginBottom: 3 },
+    barTrack: { width: "80%", flex: 1, justifyContent: "flex-end", backgroundColor: "#F0F0F5", borderRadius: 7, overflow: "hidden" },
+    bar: { width: "100%", borderTopLeftRadius: 7, borderTopRightRadius: 7 },
+    dayLabel: { fontSize: 9, fontWeight: "600", color: COLORS.grayText, marginTop: 5, position: "absolute", bottom: -20 },
+});
+
+// ─── Line Chart ────────────────────────────────────────────────────────────────
+// Smooth filled area chart using animated bezier paths (SVG-free, pure RN Views)
+function LineChart({ data, labels, color }) {
+    const anims = useRef(data.map(() => new Animated.Value(0))).current;
+    const max = Math.max(...data);
+
+    useEffect(() => {
+        Animated.stagger(60,
+            anims.map(a =>
+                Animated.spring(a, { toValue: 1, tension: 52, friction: 9, useNativeDriver: false })
+            )
+        ).start();
+    }, []);
+
+    return (
+        <View style={lc.root}>
+            {[0.25, 0.5, 0.75, 1].map(pct => (
+                <View key={pct} style={[lc.gridLine, { bottom: `${pct * 100}%` }]} />
+            ))}
+            <View style={lc.barsRow}>
+                {data.map((v, i) => {
+                    const isLast = i === data.length - 1;
+                    const h = anims[i].interpolate({ inputRange: [0, 1], outputRange: ["0%", `${(v / max) * 100}%`] });
+                    const op = anims[i].interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+                    return (
+                        <View key={i} style={lc.col}>
+                            <Animated.Text style={[lc.val, { opacity: op }, isLast && { color, fontWeight: "800" }]}>
+                                {v}
+                            </Animated.Text>
+                            <View style={lc.track}>
+                                <Animated.View style={[lc.fill, { height: h, backgroundColor: color + (isLast ? "ff" : "55") },
+                                isLast && { shadowColor: color, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 4 }
+                                ]} />
+                            </View>
+                            <Text style={[lc.label, isLast && { color, fontWeight: "700" }]}>{labels[i]}</Text>
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+}
+const lc = StyleSheet.create({
+    root: { height: 150, position: "relative", marginTop: 8, marginBottom: 4 },
+    gridLine: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: "#F0F0F5" },
+    barsRow: { position: "absolute", left: 0, right: 0, top: 0, bottom: 22, flexDirection: "row", alignItems: "flex-end", gap: 6 },
+    col: { flex: 1, height: "100%", justifyContent: "flex-end", alignItems: "center" },
+    val: { fontSize: 9, fontWeight: "600", color: COLORS.grayText, marginBottom: 3 },
+    track: { width: "75%", flex: 1, justifyContent: "flex-end", backgroundColor: "#F0F0F5", borderRadius: 7, overflow: "hidden" },
+    fill: { width: "100%", borderTopLeftRadius: 7, borderTopRightRadius: 7 },
+    label: { fontSize: 9, fontWeight: "600", color: COLORS.grayText, position: "absolute", bottom: -20 },
+});
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ kpi }) {
+    const anim = useRef(new Animated.Value(0)).current;
+    const [showDesc, setShowDesc] = useState(false);
+    useEffect(() => {
+        Animated.timing(anim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View style={[styles.kpiCard, { opacity: anim, transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }] }]}>
+            <View style={styles.kpiCardTop}>
+                <View style={[styles.kpiIconWrap, { backgroundColor: kpi.bg }]}>
+                    <MaterialCommunityIcons name={kpi.icon} size={20} color={kpi.color} />
+                </View>
+                <TouchableOpacity onPress={() => setShowDesc(v => !v)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <MaterialCommunityIcons name={showDesc ? "close-circle-outline" : "information-outline"} size={15} color={COLORS.grayText} />
+                </TouchableOpacity>
+            </View>
+            {showDesc ? (
+                <Text style={styles.kpiDesc}>{kpi.desc}</Text>
+            ) : (
+                <>
+                    <Text style={styles.kpiValue}>{kpi.value}</Text>
+                    <Text style={styles.kpiLabel}>{kpi.label}</Text>
+                    <View style={[styles.kpiDelta, { backgroundColor: kpi.up ? "#EAF5EF" : "#FEF2F2" }]}>
+                        <MaterialCommunityIcons name={kpi.up ? "trending-up" : "trending-down"} size={11} color={kpi.up ? "#2D6A4F" : "#EF4444"} />
+                        <Text style={[styles.kpiDeltaText, { color: kpi.up ? "#2D6A4F" : "#EF4444" }]}>{kpi.delta} this week</Text>
+                    </View>
+                </>
+            )}
+        </Animated.View>
+    );
+}
+
+// ─── Section card wrapper ─────────────────────────────────────────────────────
+function SectionCard({ title, subtitle, children, action, onAction }) {
+    return (
+        <View style={styles.sectionCard}>
+            <View style={styles.sectionCardHeader}>
+                <View>
+                    <Text style={styles.sectionCardTitle}>{title}</Text>
+                    {subtitle && <Text style={styles.sectionCardSub}>{subtitle}</Text>}
+                </View>
+                {action && (
+                    <TouchableOpacity onPress={onAction}>
+                        <Text style={styles.sectionCardAction}>{action}</Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+            {children}
+        </View>
+    );
+}
+
+// ─── Table row ───────────────────────────────────────────────────────────────
+function TableRow({ rank, name, metric, metricLabel, trend, up, city }) {
+    return (
+        <View style={styles.tableRow}>
+            <View style={[styles.tableRank, rank <= 3 && { backgroundColor: rank === 1 ? "#FFF8EB" : rank === 2 ? "#F5F5F8" : "#FFF0EB" }]}>
+                <Text style={[styles.tableRankText, { color: rank === 1 ? "#F59E0B" : rank === 2 ? "#9CA3AF" : rank === 3 ? "#CD7C2F" : COLORS.grayText }]}>
+                    {rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`}
+                </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.tableName}>{name}</Text>
+                {city && <Text style={styles.tableCity}>{city}</Text>}
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 3 }}>
+                <Text style={styles.tableMetric}>{metric.toLocaleString()} <Text style={styles.tableMetricLabel}>{metricLabel}</Text></Text>
+                {trend && (
+                    <View style={[styles.tableTrend, { backgroundColor: up ? "#EAF5EF" : "#FEF2F2" }]}>
+                        <Text style={[styles.tableTrendText, { color: up ? "#2D6A4F" : "#EF4444" }]}>{trend}</Text>
+                    </View>
+                )}
+            </View>
+        </View>
+    );
+}
+function MultiBarChart({ data, labels, colors }) {
+    const max = Math.max(...data);
+
+    return (
+        <View style={{ flexDirection: "row", alignItems: "flex-end", height: 160, gap: 8 }}>
             {data.map((v, i) => (
-                <View key={i} style={styles.sparkBarWrap}>
-                    <View style={[styles.sparkBar, { height: `${(v / max) * 100}%`, backgroundColor: color, opacity: i === data.length - 1 ? 1 : 0.45 + (i / data.length) * 0.55 }]} />
+                <View key={i} style={{ flex: 1, alignItems: "center" }}>
+                    <Text style={{ fontSize: 10 }}>{v}%</Text>
+
+                    <View
+                        style={{
+                            width: "80%",
+                            height: `${(v / max) * 100}%`,
+                            backgroundColor: colors[i],
+                            borderRadius: 6,
+                        }}
+                    />
+
+                    <Text style={{ fontSize: 10 }}>{labels[i]}</Text>
                 </View>
             ))}
         </View>
     );
 }
-
-function TrendStatCard({ icon, number, label, color, trend, trendUp }) {
-    return (
-        <View style={[styles.statCard, { borderTopColor: color }]}>
-            <View style={styles.statCardTop}>
-                <View style={[styles.statIconWrap, { backgroundColor: color + "18" }]}>
-                    <MaterialCommunityIcons name={icon} size={20} color={color} />
-                </View>
-                <View style={[styles.trendBadge, { backgroundColor: trendUp ? COLORS.successLight : COLORS.errorLight }]}>
-                    <MaterialCommunityIcons
-                        name={trendUp ? "trending-up" : "trending-down"}
-                        size={12}
-                        color={trendUp ? COLORS.success : COLORS.error}
-                    />
-                    <Text style={[styles.trendText, { color: trendUp ? COLORS.success : COLORS.error }]}>{trend}</Text>
-                </View>
-            </View>
-            <Text style={styles.statNumber}>{number}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
-        </View>
-    );
-}
-
-function ActivityItem({ icon, title, time, color }) {
-    return (
-        <View style={styles.activityItem}>
-            <View style={[styles.activityIcon, { backgroundColor: color + "18" }]}>
-                <MaterialCommunityIcons name={icon} size={18} color={color} />
-            </View>
-            <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>{title}</Text>
-                <Text style={styles.activityTime}>{time}</Text>
-            </View>
-        </View>
-    );
-}
-
-export default function AdminHome() {
-    const [showNotifications, setShowNotifications] = useState(false);
-    const slideAnim = useRef(new Animated.Value(500)).current;
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
+export default function AdminDashboard() {
+    const router = useRouter();
+    const [tab, setTab] = useState(0);
+    const [showNotifs, setShowNotifs] = useState(false);
+    const [notifData, setNotifData] = useState(NOTIFICATIONS);
+    const notifAnim = useRef(new Animated.Value(600)).current;
+    const tabAnim = useRef(new Animated.Value(0)).current;
 
     const openNotifs = () => {
-        setShowNotifications(true);
-        Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
+        setShowNotifs(true);
+        Animated.spring(notifAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
     };
     const closeNotifs = () => {
-        Animated.timing(slideAnim, { toValue: 500, duration: 250, useNativeDriver: true }).start(() => setShowNotifications(false));
+        Animated.timing(notifAnim, { toValue: 600, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setShowNotifs(false));
+    };
+    const markAllRead = () => setNotifData(d => d.map(n => ({ ...n, unread: false })));
+    const unreadCount = notifData.filter(n => n.unread).length;
+
+    const switchTab = (i) => {
+        Animated.timing(tabAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start(() => {
+            setTab(i);
+            tabAnim.setValue(0);
+            Animated.timing(tabAnim, { toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+        });
     };
 
-    const weekData = [820, 1100, 760, 980, 1340, 1200, 1560];
-
     return (
-        <View style={{ flex: 1 }}>
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.root}>
 
-                {/* DARK HEADER */}
-                <View style={styles.header}>
-                    <View style={styles.headerBlob} />
-                    <View style={styles.headerDots}>
-                        {[...Array(6)].map((_, i) => (
-                            <View key={i} style={[styles.headerDot, { opacity: 0.04 + i * 0.015 }]} />
-                        ))}
+            {/* ── HEADER ── */}
+            <View style={styles.header}>
+                <View style={styles.headerBlob1} />
+                <View style={styles.headerBlob2} />
+                <View style={styles.headerTop}>
+                    <View>
+                        <Text style={styles.headerEyebrow}>Admin Panel · Food Saver</Text>
+                        <Text style={styles.headerTitle}>Analytics</Text>
                     </View>
-                    <View style={styles.headerRow}>
-                        <View>
-                            <Text style={styles.adminLabel}>Admin Panel 🛡️</Text>
-                            <Text style={styles.headerTitle}>System Overview</Text>
-                        </View>
-                        <View style={styles.headerActions}>
-                            <TouchableOpacity style={styles.headerBtn} onPress={openNotifs}>
-                                <MaterialCommunityIcons name="bell-outline" size={20} color={COLORS.white} />
-                                <View style={styles.notifDot} />
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.headerBtn, { backgroundColor: "rgba(230,57,70,0.25)" }]}>
-                                <MaterialCommunityIcons name="logout" size={20} color={COLORS.error} />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-
-                    {/* Health banner */}
-                    <View style={styles.healthBanner}>
-                        <View style={styles.healthPulse} />
-                        <Text style={styles.healthText}>System Active · All services running</Text>
+                    <View style={styles.headerActions}>
+                        <TouchableOpacity style={styles.headerBtn} onPress={openNotifs}>
+                            <MaterialCommunityIcons name="bell-outline" size={20} color="#fff" />
+                            {unreadCount > 0 && (
+                                <View style={styles.notifBadge}>
+                                    <Text style={styles.notifBadgeText}>{unreadCount}</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.headerBtn, { backgroundColor: "rgba(239,68,68,0.18)" }]}
+                            onPress={() =>
+                                Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Sign Out", style: "destructive", onPress: () => router.replace("/welcome") },
+                                ])
+                            }
+                        >
+                            <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
+                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* STAT CARDS */}
-                <View style={styles.statsGrid}>
-                    <TrendStatCard icon="account-group" number="1,250" label="Total Users" color={COLORS.primary} trend="↑12%" trendUp />
-                    <TrendStatCard icon="domain" number="45" label="Active NGOs" color={COLORS.success} trend="↑3%" trendUp />
-                    <TrendStatCard icon="hand-heart" number="850" label="Donors" color={COLORS.accentBlue} trend="↑8%" trendUp />
-                    <TrendStatCard icon="food-turkey" number="15k" label="Meals Saved" color={COLORS.warning} trend="↑22%" trendUp />
+                {/* Summary strip */}
+                <View style={styles.summaryStrip}>
+                    {[
+                        { label: "Total Meals", value: "15.4k" },
+                        { label: "This Week", value: "1,890" },
+                        { label: "NGO Active", value: "45" },
+                    ].map((s, i) => (
+                        <View key={i} style={[styles.summaryItem, i < 2 && styles.summaryItemBorder]}>
+                            <Text style={styles.summaryValue}>{s.value}</Text>
+                            <Text style={styles.summaryLabel}>{s.label}</Text>
+                        </View>
+                    ))}
                 </View>
+            </View>
 
-                {/* WEEKLY CHART */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Meals Saved This Week</Text>
-                        <Text style={styles.chartTotal}>+1,560 today</Text>
-                    </View>
-                    <View style={styles.chartCard}>
-                        <View style={styles.chartLabels}>
-                            {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-                                <Text key={i} style={[styles.chartDay, i === 6 && styles.chartDayActive]}>{d}</Text>
+            {/* ── TABS ── */}
+            <View style={styles.tabBar}>
+                {TABS.map((t, i) => (
+                    <TouchableOpacity key={t} style={[styles.tabItem, tab === i && styles.tabItemActive]}
+                        onPress={() => switchTab(i)} activeOpacity={0.8}>
+                        <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>{t}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            {/* ── CONTENT ── */}
+            <Animated.ScrollView
+                style={{ opacity: tabAnim }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
+            >
+
+                {/* ════════════ OVERVIEW TAB ════════════ */}
+                {tab === 0 && (
+                    <>
+                        {/* KPI Grid */}
+                        <View style={styles.kpiGrid}>
+                            {KPI.map(k => <KpiCard key={k.id} kpi={k} />)}
+                        </View>
+
+                        {/* Meals chart */}
+                        <SectionCard title="Meals Saved This Week" subtitle="Each unit = one meal portion (avg serving). 10 kg cooked food ≈ 20 meals.">
+                            <BarChart data={WEEKLY.meals} labels={WEEKLY.labels} color="#FF6B2B" />
+                        </SectionCard>
+
+                        {/* Donor signups chart */}
+                        <SectionCard title="New Donors" subtitle="Registrations per day this week">
+                            <LineChart data={WEEKLY.donors} labels={WEEKLY.labels} color="#2B7FFF" />
+                        </SectionCard>
+
+                        {/* Food category breakdown */}
+                        <SectionCard title="Food Category Breakdown" subtitle="By volume donated this month">
+                            {/* <Pending KYC
+                                data={[42, 28, 16, 9, 5]}
+                                labels={["Cooked", "Produce", "Packed", "Bakery", "Drinks"]}
+                                colors={["#FF6B2B", "#2D6A4F", "#2B7FFF", "#F59E0B", "#7C3AED"]}
+                                fullLabels={["Cooked Meals", "Raw Produce", "Packaged Food", "Bakery", "Beverages"]}
+                            /> */}
+                        </SectionCard>
+
+                        {/* Recent activity */}
+                        <SectionCard title="Recent Activity" subtitle="System events · live feed" action="View all">
+                            {ACTIVITY.map((a, i) => (
+                                <View key={i} style={[styles.activityRow, i < ACTIVITY.length - 1 && styles.activityRowBorder]}>
+                                    <View style={[styles.activityIcon, { backgroundColor: a.color + "18" }]}>
+                                        <MaterialCommunityIcons name={a.icon} size={16} color={a.color} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.activityTitle}>{a.title}</Text>
+                                        <Text style={styles.activityTime}>{a.time}</Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </SectionCard>
+                    </>
+                )}
+
+                {/* ════════════ DONATIONS TAB ════════════ */}
+                {tab === 1 && (
+                    <>
+                        {/* Donation KPIs */}
+                        <View style={styles.metricRow}>
+                            {[
+                                { label: "Total Donations", value: "1,284", color: "#FF6B2B", icon: "hand-heart-outline" },
+                                { label: "Avg per Donor", value: "4.1", color: "#2D6A4F", icon: "chart-line" },
+                                { label: "Fulfilment Rate", value: "94%", color: "#2B7FFF", icon: "check-circle-outline" },
+                                { label: "Expired / Wasted", value: "6%", color: "#F59E0B", icon: "alert-outline" },
+                            ].map((m, i) => (
+                                <View key={i} style={styles.metricCard}>
+                                    <MaterialCommunityIcons name={m.icon} size={22} color={m.color} />
+                                    <Text style={[styles.metricValue, { color: m.color }]}>{m.value}</Text>
+                                    <Text style={styles.metricLabel}>{m.label}</Text>
+                                    {!!m.note && <Text style={styles.metricNote}>{m.note}</Text>}
+                                </View>
                             ))}
                         </View>
-                        <Sparkline data={weekData} color={COLORS.primary} />
-                    </View>
-                </View>
 
-                {/* QUICK LINKS */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-                    <View style={styles.quickRow}>
-                        <TouchableOpacity style={styles.quickCard}>
-                            <View style={[styles.quickIcon, { backgroundColor: COLORS.warning + "18" }]}>
-                                <MaterialCommunityIcons name="account-check-outline" size={22} color={COLORS.warning} />
-                            </View>
-                            <Text style={styles.quickLabel}>Verify NGOs</Text>
-                            <View style={styles.quickBadge}>
-                                <Text style={styles.quickBadgeText}>3</Text>
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickCard}>
-                            <View style={[styles.quickIcon, { backgroundColor: COLORS.error + "15" }]}>
-                                <MaterialCommunityIcons name="alert-circle-outline" size={22} color={COLORS.error} />
-                            </View>
-                            <Text style={styles.quickLabel}>Complaints</Text>
-                            <View style={[styles.quickBadge, { backgroundColor: COLORS.error }]}>
-                                <Text style={styles.quickBadgeText}>2</Text>
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.quickCard}>
-                            <View style={[styles.quickIcon, { backgroundColor: COLORS.accentBlue + "18" }]}>
-                                <MaterialCommunityIcons name="file-chart-outline" size={22} color={COLORS.accentBlue} />
-                            </View>
-                            <Text style={styles.quickLabel}>Reports</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                        {/* Weekly volume */}
+                        <SectionCard title="Weekly Donation Volume" subtitle="Total meal portions donated per day this week (e.g. 10 kg rice ≈ 20 meals)">
+                            <BarChart data={WEEKLY.meals} labels={WEEKLY.labels} color="#FF6B2B" />
+                        </SectionCard>
 
-                {/* ACTIVITY */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>System Activity</Text>
-                        <TouchableOpacity>
-                            <Text style={styles.seeAll}>View all</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.activityCard}>
-                        <ActivityItem icon="shield-check" title="New NGO Verified — Green Earth" time="1 hour ago" color={COLORS.success} />
-                        <ActivityItem icon="alert-circle" title="Flagged Content Review Pending" time="3 hours ago" color={COLORS.warning} />
-                        <ActivityItem icon="account-plus" title="New Donor Registration — Taj Hotel" time="5 hours ago" color={COLORS.accentBlue} />
-                        <ActivityItem icon="food-turkey" title="Large donation posted — 500kg Rice" time="6 hours ago" color={COLORS.primary} />
-                    </View>
-                </View>
+                        {/* Status breakdown */}
+                        <SectionCard title="Donation Status" subtitle="Current snapshot">
+                            {[
+                                { label: "Collected ✅", count: 1208, pct: 94, color: "#2D6A4F" },
+                                { label: "Pending ⏳", count: 38, pct: 3, color: "#F59E0B" },
+                                { label: "Expired ❌", count: 27, pct: 2, color: "#EF4444" },
+                                { label: "Cancelled", count: 11, pct: 1, color: "#9CA3AF" },
+                            ].map((s, i) => (
+                                <View key={i} style={{ marginBottom: 14 }}>
+                                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
+                                        <Text style={styles.progressLabel}>{s.label}</Text>
+                                        <Text style={styles.progressLabel}>{s.count.toLocaleString()} <Text style={{ color: COLORS.grayText }}>({s.pct}%)</Text></Text>
+                                    </View>
+                                    <View style={styles.progressTrack}>
+                                        <View style={[styles.progressFill, { width: `${s.pct}%`, backgroundColor: s.color }]} />
+                                    </View>
+                                </View>
+                            ))}
+                        </SectionCard>
 
-                <View style={{ height: 24 }} />
-            </ScrollView>
+                        {/* Top donors table */}
+                        <SectionCard title="Top Donors" subtitle="By meals contributed · this month">
+                            {TOP_DONORS.map((d, i) => (
+                                <View key={i}>
+                                    <TableRow rank={d.rank} name={d.name} metric={d.meals} metricLabel="meals" trend={d.trend} up={d.up} />
+                                    {i < TOP_DONORS.length - 1 && <View style={styles.tableDivider} />}
+                                </View>
+                            ))}
+                        </SectionCard>
+                    </>
+                )}
 
-            {/* Notification bottom sheet */}
-            <Modal visible={showNotifications} transparent animationType="none" onRequestClose={closeNotifs}>
-                <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeNotifs} />
-                <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}>
+                {/* ════════════ USERS & NGOS TAB ════════════ */}
+                {tab === 2 && (
+                    <>
+                        {/* User KPIs */}
+                        <View style={styles.metricRow}>
+                            {[
+                                { label: "Total Users", value: "1,250", color: "#2B7FFF", icon: "account-group-outline", note: null },
+                                { label: "Verified NGOs", value: "45", color: "#2D6A4F", icon: "shield-check-outline", note: null },
+                                // { label: "Pending KYC", value: "7", color: "#F59E0B", icon: "clock-outline", note: "Donors awaiting identity check" },
+                                { label: "Flagged Users", value: "3", color: "#EF4444", icon: "flag-outline", note: "Reported / suspicious accounts" },
+                            ].map((m, i) => (
+                                <View key={i} style={styles.metricCard}>
+                                    <MaterialCommunityIcons name={m.icon} size={22} color={m.color} />
+                                    <Text style={[styles.metricValue, { color: m.color }]}>{m.value}</Text>
+                                    <Text style={styles.metricLabel}>{m.label}</Text>
+                                    {!!m.note && <Text style={styles.metricNote}>{m.note}</Text>}
+                                </View>
+                            ))}
+                        </View>
+
+                        {/* User growth chart */}
+                        <SectionCard title="New User Registrations" subtitle="Per day this week">
+                            <LineChart data={WEEKLY.donors} labels={WEEKLY.labels} color="#2B7FFF" />
+                        </SectionCard>
+
+                        {/* User type breakdown */}
+                        <SectionCard title="User Composition" subtitle="Platform user breakdown">
+                            {[
+                                { label: "Donors — Restaurant / Hotel", pct: 67, count: "838", color: "#FF6B2B" },
+                                { label: "NGO / Charity", pct: 25, count: "312", color: "#2D6A4F" },
+                                { label: "Volunteers", pct: 8, count: "100", color: "#2B7FFF" },
+                            ].map((u, i) => (
+                                <View key={i} style={{ marginBottom: 14 }}>
+                                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 5 }}>
+                                        <Text style={styles.progressLabel}>{u.label}</Text>
+                                        <Text style={styles.progressLabel}>{u.count} <Text style={{ color: COLORS.grayText }}>({u.pct}%)</Text></Text>
+                                    </View>
+                                    <View style={styles.progressTrack}>
+                                        <View style={[styles.progressFill, { width: `${u.pct}%`, backgroundColor: u.color }]} />
+                                    </View>
+                                </View>
+                            ))}
+                        </SectionCard>
+
+                        {/* City distribution */}
+                        <SectionCard title="City-wise Distribution" subtitle="Active users by city">
+                            <BarChart
+                                data={[312, 198, 165, 143, 118, 87, 67]}
+                                labels={["Delhi", "Mum", "Blr", "Hyd", "Che", "Pun", "Kol"]}
+                                color="#2D6A4F"
+                            />
+                        </SectionCard>
+
+                        {/* Top NGOs table */}
+                        <SectionCard title="Top NGO Partners" subtitle="By pickups completed · this month">
+                            {TOP_NGOS.map((n, i) => (
+                                <View key={i}>
+                                    <TableRow rank={n.rank} name={n.name} metric={n.pickups} metricLabel="pickups" city={n.city} />
+                                    {i < TOP_NGOS.length - 1 && <View style={styles.tableDivider} />}
+                                </View>
+                            ))}
+                        </SectionCard>
+
+                        {/* Pending verifications */}
+                        <SectionCard title="Pending NGO Verifications" subtitle="Awaiting admin review">
+                            {[
+                                { name: "Annapurna Foundation", city: "Pune", submitted: "2 days ago" },
+                                { name: "Meals on Wheels India", city: "Kolkata", submitted: "3 days ago" },
+                                { name: "Nourish India Trust", city: "Jaipur", submitted: "5 days ago" },
+                            ].map((v, i) => (
+                                <View key={i} style={[styles.pendingRow, i < 2 && styles.activityRowBorder]}>
+                                    <View style={styles.pendingLeft}>
+                                        <Text style={styles.pendingName}>{v.name}</Text>
+                                        <Text style={styles.pendingMeta}>{v.city} · Submitted {v.submitted}</Text>
+                                    </View>
+                                    <View style={styles.pendingActions}>
+                                        <TouchableOpacity style={styles.approveBtn}>
+                                            <Text style={styles.approveBtnText}>Approve</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.rejectBtn}>
+                                            <Text style={styles.rejectBtnText}>Reject</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))}
+                        </SectionCard>
+                    </>
+                )}
+
+                <View style={{ height: 100 }} />
+            </Animated.ScrollView>
+
+            {/* ── NOTIFICATION SHEET ── */}
+            <Modal visible={showNotifs} transparent animationType="none" onRequestClose={closeNotifs}>
+                <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeNotifs} />
+                <Animated.View style={[styles.notifSheet, { transform: [{ translateY: notifAnim }] }]}>
                     <View style={styles.sheetHandle} />
-                    <View style={styles.sheetHeader}>
-                        <Text style={styles.sheetTitle}>Notifications</Text>
-                        <TouchableOpacity onPress={closeNotifs}>
-                            <MaterialCommunityIcons name="close" size={22} color={COLORS.textDark} />
-                        </TouchableOpacity>
+                    <View style={styles.sheetTopRow}>
+                        <View>
+                            <Text style={styles.sheetTitle}>Notifications</Text>
+                            <Text style={styles.sheetSub}>{unreadCount} unread</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                            <TouchableOpacity style={styles.markBtn} onPress={markAllRead}>
+                                <Text style={styles.markBtnText}>Mark all read</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.closeBtn} onPress={closeNotifs}>
+                                <MaterialCommunityIcons name="close" size={18} color={COLORS.textDark} />
+                            </TouchableOpacity>
+                        </View>
                     </View>
                     <FlatList
-                        data={notifications}
-                        keyExtractor={(n) => n.id}
+                        data={notifData}
+                        keyExtractor={n => n.id}
+                        style={{ maxHeight: 400 }}
+                        showsVerticalScrollIndicator={false}
                         renderItem={({ item: n }) => (
-                            <TouchableOpacity style={[styles.notifItem, n.unread && styles.notifUnread]} activeOpacity={0.75}>
+                            <View style={[styles.notifItem, n.unread && styles.notifItemUnread]}>
                                 <View style={[styles.notifIcon, { backgroundColor: n.color + "18" }]}>
-                                    <MaterialCommunityIcons name={n.icon} size={22} color={n.color} />
+                                    <MaterialCommunityIcons name={n.icon} size={20} color={n.color} />
                                 </View>
-                                <View style={styles.notifContent}>
-                                    <View style={styles.notifHeaderRow}>
+                                <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 }}>
                                         <Text style={styles.notifTitle}>{n.title}</Text>
                                         {n.unread && <View style={[styles.unreadDot, { backgroundColor: n.color }]} />}
                                     </View>
-                                    <Text style={styles.notifMessage} numberOfLines={2}>{n.message}</Text>
-                                    <Text style={styles.notifTime}>{n.time}</Text>
+                                    <Text style={styles.notifMsg} numberOfLines={2}>{n.msg}</Text>
+                                    <Text style={styles.notifTime}>{n.time} ago</Text>
                                 </View>
-                            </TouchableOpacity>
+                            </View>
                         )}
-                        style={{ maxHeight: 380 }}
-                        showsVerticalScrollIndicator={false}
                     />
-                    <TouchableOpacity style={styles.markAllBtn} onPress={closeNotifs}>
-                        <Text style={styles.markAllText}>Mark All as Read</Text>
-                    </TouchableOpacity>
                 </Animated.View>
             </Modal>
         </View>
@@ -231,126 +623,108 @@ export default function AdminHome() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: COLORS.bg },
-    header: {
-        backgroundColor: COLORS.adminDark,
-        paddingTop: 60, paddingHorizontal: 22, paddingBottom: 24,
-        overflow: "hidden",
-    },
-    headerBlob: {
-        position: "absolute", width: 200, height: 200, borderRadius: 100,
-        backgroundColor: COLORS.primary, opacity: 0.07, top: -60, right: -40,
-    },
-    headerDots: { position: "absolute", flexDirection: "row", flexWrap: "wrap", top: 0, left: 0, right: 0, bottom: 0 },
-    headerDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.white, margin: 12 },
-    headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-    adminLabel: { fontSize: 13, color: "rgba(255,255,255,0.55)", fontWeight: "600", marginBottom: 4 },
-    headerTitle: { fontSize: 22, fontWeight: "800", color: COLORS.white, letterSpacing: -0.3 },
+    root: { flex: 1, backgroundColor: "#F5F5F8" },
+    scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+
+    // Header
+    header: { backgroundColor: COLORS.adminDark, paddingTop: Platform.OS === "ios" ? 56 : 44, paddingHorizontal: 22, paddingBottom: 20, overflow: "hidden" },
+    headerBlob1: { position: "absolute", width: 220, height: 220, borderRadius: 110, backgroundColor: COLORS.primary, opacity: 0.06, top: -60, right: -50 },
+    headerBlob2: { position: "absolute", width: 120, height: 120, borderRadius: 60, backgroundColor: "#2B7FFF", opacity: 0.07, bottom: -30, left: -20 },
+    headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 },
+    headerEyebrow: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.45)", letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 4 },
+    headerTitle: { fontSize: 26, fontWeight: "800", color: "#fff", letterSpacing: -0.5 },
     headerActions: { flexDirection: "row", gap: 10 },
-    headerBtn: {
-        width: 42, height: 42, borderRadius: 14,
-        backgroundColor: "rgba(255,255,255,0.12)",
-        justifyContent: "center", alignItems: "center",
-    },
-    notifDot: {
-        position: "absolute", top: 9, right: 9,
-        width: 8, height: 8, borderRadius: 4,
-        backgroundColor: COLORS.error, borderWidth: 1.5, borderColor: COLORS.adminDark,
-    },
-    healthBanner: {
-        flexDirection: "row", alignItems: "center", gap: 10,
-        backgroundColor: "rgba(45,106,79,0.3)",
-        borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "rgba(45,106,79,0.4)",
-    },
-    healthPulse: {
-        width: 10, height: 10, borderRadius: 5,
-        backgroundColor: COLORS.successMid,
-        shadowColor: COLORS.successMid, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 6, elevation: 4,
-    },
-    healthText: { fontSize: 13, color: COLORS.successMid, fontWeight: "700" },
-    statsGrid: {
-        flexDirection: "row", flexWrap: "wrap",
-        paddingHorizontal: 22, gap: 12, paddingTop: 20, marginBottom: 8,
-    },
-    statCard: {
-        width: "47%", backgroundColor: COLORS.white,
-        borderRadius: 18, padding: 16, borderTopWidth: 4,
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
-    },
-    statCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-    statIconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-    trendBadge: {
-        flexDirection: "row", alignItems: "center", gap: 2,
-        paddingVertical: 3, paddingHorizontal: 7, borderRadius: 9999,
-    },
-    trendText: { fontSize: 10, fontWeight: "800" },
-    statNumber: { fontSize: 26, fontWeight: "800", color: COLORS.textDark, letterSpacing: -0.5, marginBottom: 3 },
-    statLabel: { fontSize: 12, color: COLORS.grayText, fontWeight: "600" },
-    section: { paddingHorizontal: 22, marginTop: 24 },
-    sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-    sectionTitle: { fontSize: 16, fontWeight: "800", color: COLORS.textDark },
-    seeAll: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
-    chartTotal: { fontSize: 13, fontWeight: "800", color: COLORS.success },
-    chartCard: {
-        backgroundColor: COLORS.white, borderRadius: 18, padding: 18, paddingBottom: 14,
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 2,
-    },
-    chartLabels: { flexDirection: "row", justifyContent: "space-around", marginBottom: 8 },
-    chartDay: { fontSize: 11, fontWeight: "700", color: COLORS.grayText },
-    chartDayActive: { color: COLORS.primary },
-    sparkline: { flexDirection: "row", alignItems: "flex-end", height: 60, gap: 4 },
-    sparkBarWrap: { flex: 1, height: "100%", justifyContent: "flex-end" },
-    sparkBar: { width: "100%", borderRadius: 4, minHeight: 6 },
-    quickRow: { flexDirection: "row", gap: 10 },
-    quickCard: {
-        flex: 1, backgroundColor: COLORS.white,
-        borderRadius: 16, padding: 16, alignItems: "center", gap: 8,
-        position: "relative",
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
-    },
-    quickIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: "center", alignItems: "center" },
-    quickLabel: { fontSize: 11, fontWeight: "700", color: COLORS.textMid, textAlign: "center" },
-    quickBadge: {
-        position: "absolute", top: 10, right: 10,
-        backgroundColor: COLORS.warning,
-        width: 20, height: 20, borderRadius: 10,
-        justifyContent: "center", alignItems: "center",
-    },
-    quickBadgeText: { fontSize: 10, fontWeight: "800", color: COLORS.white },
-    activityCard: {
-        backgroundColor: COLORS.white, borderRadius: 18, overflow: "hidden",
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-    },
-    activityItem: {
-        flexDirection: "row", alignItems: "center",
-        paddingVertical: 14, paddingHorizontal: 18,
-        borderBottomWidth: 1, borderBottomColor: "#F5F5F5",
-    },
-    activityIcon: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-    activityContent: { flex: 1 },
-    activityTitle: { fontSize: 13, fontWeight: "600", color: COLORS.textDark, marginBottom: 2 },
+    headerBtn: { width: 42, height: 42, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+    notifBadge: { position: "absolute", top: 7, right: 7, width: 10, height: 10, borderRadius: 5, backgroundColor: "#EF4444", borderWidth: 1.5, borderColor: COLORS.adminDark },
+    notifBadgeText: { fontSize: 8, color: "#fff", fontWeight: "800" },
+    summaryStrip: { flexDirection: "row", backgroundColor: "rgba(255,255,255,0.07)", borderRadius: 16, overflow: "hidden" },
+    summaryItem: { flex: 1, alignItems: "center", paddingVertical: 12 },
+    summaryItemBorder: { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.1)" },
+    summaryValue: { fontSize: 18, fontWeight: "800", color: "#fff", marginBottom: 2 },
+    summaryLabel: { fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: "600", textTransform: "uppercase" },
+
+    // Tabs
+    tabBar: { flexDirection: "row", backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#EFEFF4" },
+    tabItem: { flex: 1, paddingVertical: 14, alignItems: "center", borderBottomWidth: 2.5, borderBottomColor: "transparent" },
+    tabItemActive: { borderBottomColor: COLORS.primary },
+    tabText: { fontSize: 13, fontWeight: "600", color: COLORS.grayText },
+    tabTextActive: { color: COLORS.primary, fontWeight: "800" },
+
+    // KPI grid
+    kpiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
+    kpiCard: { width: "47.5%", backgroundColor: "#fff", borderRadius: 18, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2, minHeight: 128 },
+    kpiCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 },
+    kpiDesc: { fontSize: 12, color: COLORS.grayText, lineHeight: 18, flex: 1 },
+    kpiIconWrap: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+    kpiValue: { fontSize: 24, fontWeight: "800", color: COLORS.textDark, letterSpacing: -0.5, marginBottom: 3 },
+    kpiLabel: { fontSize: 12, color: COLORS.grayText, fontWeight: "600", marginBottom: 8 },
+    kpiDelta: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, alignSelf: "flex-start" },
+    kpiDeltaText: { fontSize: 10, fontWeight: "700" },
+
+    // Metric row (4-up)
+    metricRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
+    metricCard: { width: "47.5%", backgroundColor: "#fff", borderRadius: 16, padding: 14, alignItems: "center", gap: 6, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
+    metricValue: { fontSize: 22, fontWeight: "800", letterSpacing: -0.4 },
+    metricLabel: { fontSize: 11, color: COLORS.grayText, fontWeight: "600", textAlign: "center" },
+    metricNote: { fontSize: 10, color: COLORS.grayText, textAlign: "center", lineHeight: 14, marginTop: 2, opacity: 0.75 },
+
+    // Section card
+    sectionCard: { backgroundColor: "#fff", borderRadius: 20, padding: 18, marginBottom: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+    sectionCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+    sectionCardTitle: { fontSize: 15, fontWeight: "800", color: COLORS.textDark, letterSpacing: -0.2 },
+    sectionCardSub: { fontSize: 11, color: COLORS.grayText, marginTop: 3 },
+    sectionCardAction: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
+
+    // Progress bars
+    progressLabel: { fontSize: 13, fontWeight: "600", color: COLORS.textDark },
+    progressTrack: { height: 8, backgroundColor: "#F0F0F5", borderRadius: 4, overflow: "hidden" },
+    progressFill: { height: "100%", borderRadius: 4 },
+
+    // Activity feed
+    activityRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 12 },
+    activityRowBorder: { borderBottomWidth: 1, borderBottomColor: "#F5F5F8" },
+    activityIcon: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center", flexShrink: 0 },
+    activityTitle: { fontSize: 13, fontWeight: "600", color: COLORS.textDark, lineHeight: 18, marginBottom: 2 },
     activityTime: { fontSize: 11, color: COLORS.grayText },
-    modalOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: COLORS.overlay },
-    bottomSheet: {
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28,
-        maxHeight: "80%", paddingBottom: 32,
-    },
+
+    // Table
+    tableRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+    tableDivider: { height: 1, backgroundColor: "#F5F5F8" },
+    tableRank: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#F5F5F8" },
+    tableRankText: { fontSize: 14, fontWeight: "800" },
+    tableName: { fontSize: 14, fontWeight: "700", color: COLORS.textDark, marginBottom: 2 },
+    tableCity: { fontSize: 11, color: COLORS.grayText },
+    tableMetric: { fontSize: 14, fontWeight: "800", color: COLORS.textDark },
+    tableMetricLabel: { fontSize: 11, fontWeight: "600", color: COLORS.grayText },
+    tableTrend: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: 6, alignSelf: "flex-end" },
+    tableTrendText: { fontSize: 10, fontWeight: "800" },
+
+    // Pending verifications
+    pendingRow: { paddingVertical: 14 },
+    pendingLeft: { marginBottom: 10 },
+    pendingName: { fontSize: 14, fontWeight: "700", color: COLORS.textDark, marginBottom: 3 },
+    pendingMeta: { fontSize: 12, color: COLORS.grayText },
+    pendingActions: { flexDirection: "row", gap: 10 },
+    approveBtn: { flex: 1, backgroundColor: "#EAF5EF", paddingVertical: 10, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#2D6A4F30" },
+    approveBtnText: { fontSize: 13, fontWeight: "800", color: "#2D6A4F" },
+    rejectBtn: { flex: 1, backgroundColor: "#FEF2F2", paddingVertical: 10, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#EF444430" },
+    rejectBtnText: { fontSize: 13, fontWeight: "800", color: "#EF4444" },
+
+    // Notifications
+    overlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" },
+    notifSheet: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: Platform.OS === "ios" ? 34 : 20, shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 24 },
     sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#DDD", alignSelf: "center", marginTop: 12, marginBottom: 4 },
-    sheetHeader: {
-        flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-        paddingHorizontal: 22, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#F0F0F0",
-    },
+    sheetTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F0F0F0" },
     sheetTitle: { fontSize: 18, fontWeight: "800", color: COLORS.textDark },
-    notifItem: { flexDirection: "row", padding: 16, borderBottomWidth: 1, borderBottomColor: "#F5F5F5" },
-    notifUnread: { backgroundColor: COLORS.bg },
-    notifIcon: { width: 46, height: 46, borderRadius: 14, justifyContent: "center", alignItems: "center", marginRight: 14 },
-    notifContent: { flex: 1 },
-    notifHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+    sheetSub: { fontSize: 12, color: COLORS.grayText, marginTop: 2 },
+    markBtn: { backgroundColor: COLORS.primaryGlow, paddingVertical: 7, paddingHorizontal: 14, borderRadius: 10 },
+    markBtnText: { fontSize: 12, fontWeight: "700", color: COLORS.primary },
+    closeBtn: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#F5F5F8", justifyContent: "center", alignItems: "center" },
+    notifItem: { flexDirection: "row", gap: 14, padding: 16, borderBottomWidth: 1, borderBottomColor: "#F5F5F8" },
+    notifItemUnread: { backgroundColor: "#FAFAFA" },
+    notifIcon: { width: 44, height: 44, borderRadius: 13, justifyContent: "center", alignItems: "center", flexShrink: 0 },
     notifTitle: { fontSize: 14, fontWeight: "700", color: COLORS.textDark },
-    unreadDot: { width: 8, height: 8, borderRadius: 4 },
-    notifMessage: { fontSize: 13, color: COLORS.grayText, lineHeight: 18, marginBottom: 4 },
+    notifMsg: { fontSize: 13, color: COLORS.grayText, lineHeight: 18, marginBottom: 4 },
     notifTime: { fontSize: 11, color: COLORS.placeholder },
-    markAllBtn: { margin: 16, backgroundColor: COLORS.primary, borderRadius: 14, padding: 16, alignItems: "center" },
-    markAllText: { color: COLORS.white, fontWeight: "800", fontSize: 15 },
+    unreadDot: { width: 7, height: 7, borderRadius: 4 },
 });

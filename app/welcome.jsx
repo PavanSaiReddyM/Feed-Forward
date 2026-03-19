@@ -149,7 +149,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 0, left: 0, right: 0,
     height: height * 0.62,
-    // Layered shadow from bottom up
     backgroundColor: "rgba(10,10,10,0.38)",
   },
 
