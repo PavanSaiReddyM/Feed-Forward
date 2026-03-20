@@ -10,7 +10,6 @@ import { COLORS } from "../_constants/colors";
 import { login } from "../app/services/api";
 
 const { height } = Dimensions.get("window");
-
 function Input({ label, icon, value, onChangeText, placeholder,
   secureTextEntry, keyboardType, rightIcon, onRightPress }) {
   const [focused, setFocused] = useState(false);

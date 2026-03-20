@@ -20,6 +20,7 @@ export default function Splash() {
   const ring3Opacity = useRef(new Animated.Value(0)).current;
   const ring3Scale = useRef(new Animated.Value(0.4)).current;
 
+
   useEffect(() => {
     Animated.spring(logoScale, {
       toValue: 1,

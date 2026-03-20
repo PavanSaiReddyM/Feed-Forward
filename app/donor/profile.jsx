@@ -72,7 +72,7 @@ function useSheet(initial = 600) {
 export default function DonorProfile() {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("Pavan Moola");
-  const [email, setEmail] = useState("pavanmoola19@gmail.com");
+  const [email, setEmail] = useState("psr@gmail.com");
   const [phone, setPhone] = useState("9876543210");
   const [address, setAddress] = useState("Hyderabad, Telangana");
   const router = useRouter();

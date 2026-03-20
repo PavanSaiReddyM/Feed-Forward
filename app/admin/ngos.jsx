@@ -6,9 +6,7 @@ import {
 import { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
-
 const STATUS_TABS = ["All", "Pending", "Verified", "Rejected"];
-
 export default function NGOs() {
     const [activeTab, setActiveTab] = useState("All");
     const [ngoList, setNgoList] = useState([

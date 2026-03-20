@@ -154,9 +154,21 @@ export default function ActiveDonations() {
   const filtered = filter === "All" ? DONATIONS : DONATIONS.filter(d => d.status === filter);
 
   const summary = [
-    { label: "Active", value: DONATIONS.filter(d => d.status !== "Collected").length, color: "#FF6B2B" },
-    { label: "Collected", value: DONATIONS.filter(d => d.status === "Collected").length, color: "#2D6A4F" },
-    { label: "Total", value: DONATIONS.length, color: "#2B7FFF" },
+    {
+      label: "Active", icon: "timer-sand",
+      value: DONATIONS.filter(d => d.status !== "Collected").length,
+      color: "#FF6B2B", cardBg: "rgba(255,255,255,0.18)", iconBg: "rgba(255,107,43,0.25)",
+    },
+    {
+      label: "Collected", icon: "check-circle-outline",
+      value: DONATIONS.filter(d => d.status === "Collected").length,
+      color: "#74C69D", cardBg: "rgba(255,255,255,0.18)", iconBg: "rgba(116,198,157,0.25)",
+    },
+    {
+      label: "Total", icon: "view-list-outline",
+      value: DONATIONS.length,
+      color: "#fff", cardBg: "rgba(255,255,255,0.12)", iconBg: "rgba(255,255,255,0.2)",
+    },
   ];
 
   return (
@@ -165,13 +177,28 @@ export default function ActiveDonations() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerBlob} />
-        <Text style={styles.headerLabel}>Donor Dashboard</Text>
-        <Text style={styles.headerTitle}>Active Donations</Text>
+        <View style={styles.headerBlob2} />
 
-        {/* Summary pills */}
+        {/* Title row */}
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerLabel}>Donor Dashboard</Text>
+            <Text style={styles.headerTitle}>Active Donations</Text>
+          </View>
+          {/* Live indicator */}
+          <View style={styles.livePill}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>Live</Text>
+          </View>
+        </View>
+
+        {/* Summary cards — horizontal strip */}
         <View style={styles.summaryRow}>
-          {summary.map(s => (
-            <View key={s.label} style={[styles.summaryPill, { borderColor: s.color + "40" }]}>
+          {summary.map((s, i) => (
+            <View key={s.label} style={[styles.summaryCard, { backgroundColor: s.cardBg }]}>
+              <View style={[styles.summaryIconWrap, { backgroundColor: s.iconBg }]}>
+                <MaterialCommunityIcons name={s.icon} size={16} color={s.color} />
+              </View>
               <Text style={[styles.summaryNum, { color: s.color }]}>{s.value}</Text>
               <Text style={styles.summaryLabel}>{s.label}</Text>
             </View>
