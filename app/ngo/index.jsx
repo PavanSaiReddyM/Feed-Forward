@@ -5,15 +5,11 @@ import {
     Modal, Animated, Easing,
 } from "react-native";
 import { useState, useEffect, useRef } from "react";
+import { getNgoDashboard } from "../services/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
 
-const notifications = [
-    { id: 1, icon: "check-circle", title: "Request Approved", message: "Your request for Rice & Curry has been approved", time: "2 hours ago", color: COLORS.success, unread: true },
-    { id: 2, icon: "food-variant", title: "New Food Available", message: "Fresh Vegetables available at Green Market — 1.2 km away", time: "5 hours ago", color: COLORS.primary, unread: true },
-    { id: 3, icon: "truck-delivery", title: "Pickup Completed", message: "Successfully picked up Bread Packets", time: "1 day ago", color: COLORS.accentBlue, unread: false },
-    { id: 4, icon: "alert-circle", title: "Reminder", message: "Pending pickup for approved request", time: "2 days ago", color: COLORS.warning, unread: false },
-];
+
 
 function StatCard({ icon, number, label, color, delay }) {
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -30,117 +26,116 @@ function StatCard({ icon, number, label, color, delay }) {
     }, []);
 
     return (
-        <Animated.View
-            style={[
-                styles.statCard,
-                { opacity: opacityAnim, transform: [{ scale: scaleAnim }], borderLeftColor: color },
-            ]}
-        >
-            <View style={[styles.statIconWrap, { backgroundColor: color + "18" }]}>
-                <MaterialCommunityIcons name={icon} size={22} color={color} />
-            </View>
-            <Text style={styles.statNumber}>{number}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
-        </Animated.View>
-    );
-}
+            const [showNotifications, setShowNotifications] = useState(false);
+            const slideAnim = useRef(new Animated.Value(400)).current;
+            const [dashboard, setDashboard] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [notifs, setNotifs] = useState([]);
 
-function ActivityItem({ icon, title, time, color }) {
-    return (
-        <View style={styles.activityItem}>
-            <View style={[styles.activityIcon, { backgroundColor: color + "18" }]}>
-                <MaterialCommunityIcons name={icon} size={18} color={color} />
-            </View>
-            <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>{title}</Text>
-                <Text style={styles.activityTime}>{time}</Text>
-            </View>
-            <View style={[styles.activityDot, { backgroundColor: color + "30" }]} />
-        </View>
-    );
-}
+            useEffect(() => {
+                getNgoDashboard().then(data => {
+                    setDashboard(data);
+                    setNotifs(data.notifications || []);
+                }).catch(e => {
+                    // Optionally handle error
+                }).finally(() => setLoading(false));
+            }, []);
 
-function NotificationItem({ icon, title, message, time, color, unread }) {
-    return (
-        <TouchableOpacity style={[styles.notifItem, unread && styles.notifUnread]} activeOpacity={0.75}>
-            <View style={[styles.notifIcon, { backgroundColor: color + "18" }]}>
-                <MaterialCommunityIcons name={icon} size={22} color={color} />
-            </View>
-            <View style={styles.notifContent}>
-                <View style={styles.notifHeader}>
-                    <Text style={styles.notifTitle}>{title}</Text>
-                    {unread && <View style={[styles.unreadDot, { backgroundColor: color }]} />}
-                </View>
-                <Text style={styles.notifMessage} numberOfLines={2}>{message}</Text>
-                <Text style={styles.notifTime}>{time}</Text>
-            </View>
-        </TouchableOpacity>
-    );
-}
+            const openNotifs = () => {
+                setShowNotifications(true);
+                Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
+            };
+            const closeNotifs = () => {
+                Animated.timing(slideAnim, { toValue: 400, duration: 250, easing: Easing.in(Easing.cubic), useNativeDriver: true })
+                    .start(() => setShowNotifications(false));
+            };
 
-export default function NgoDashboard() {
-    const [showNotifications, setShowNotifications] = useState(false);
-    const slideAnim = useRef(new Animated.Value(400)).current;
+            if (loading) {
+                return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><Text>Loading...</Text></View>;
+            }
 
-    const openNotifs = () => {
-        setShowNotifications(true);
-        Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
-    };
-    const closeNotifs = () => {
-        Animated.timing(slideAnim, { toValue: 400, duration: 250, easing: Easing.in(Easing.cubic), useNativeDriver: true })
-            .start(() => setShowNotifications(false));
-    };
+            const stats = dashboard?.stats || {};
+            const activity = dashboard?.activity || [];
 
-    return (
-        <View style={{ flex: 1 }}>
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            return (
+                <View style={{ flex: 1 }}>
+                    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
-                {/* HEADER */}
-                <View style={styles.header}>
-                    <View style={styles.headerBlob} />
-                    <View>
-                        <Text style={styles.greeting}>Good morning 👋</Text>
-                        <Text style={styles.orgName}>Helping Hands NGO</Text>
-                    </View>
-                    <TouchableOpacity style={styles.notifBtn} onPress={openNotifs}>
-                        <MaterialCommunityIcons name="bell-outline" size={22} color={COLORS.textDark} />
-                        <View style={styles.notifBadge} />
-                    </TouchableOpacity>
-                </View>
-
-                {/* IMPACT BANNER */}
-                <View style={styles.impactBanner}>
-                    <View style={styles.impactBannerBlob} />
-                    <View style={styles.impactLeft}>
-                        <Text style={styles.impactEmoji}>🌱</Text>
-                        <View>
-                            <Text style={styles.impactTitle}>This month's impact</Text>
-                            <Text style={styles.impactStat}>You helped feed <Text style={styles.impactHighlight}>150 people</Text></Text>
+                        {/* HEADER */}
+                        <View style={styles.header}>
+                            <View style={styles.headerBlob} />
+                            <View>
+                                <Text style={styles.greeting}>Good morning 👋</Text>
+                                {/* TODO: Replace with actual NGO name */}
+                                <Text style={styles.orgName}>NGO</Text>
+                            </View>
+                            <TouchableOpacity style={styles.notifBtn} onPress={openNotifs}>
+                                <MaterialCommunityIcons name="bell-outline" size={22} color={COLORS.textDark} />
+                                <View style={styles.notifBadge} />
+                            </TouchableOpacity>
                         </View>
-                    </View>
-                    <View style={styles.impactBadge}>
-                        <Text style={styles.impactBadgeText}>Top NGO</Text>
-                    </View>
-                </View>
 
-                {/* STATS GRID */}
-                <View style={styles.statsGrid}>
-                    <StatCard icon="food-variant" number="12" label="Active Requests" color={COLORS.primary} delay={0} />
-                    <StatCard icon="check-circle" number="8" label="Completed" color={COLORS.success} delay={80} />
-                    <StatCard icon="truck-delivery" number="5" label="In Transit" color={COLORS.accentBlue} delay={160} />
-                    <StatCard icon="account-group" number="150" label="People Served" color={COLORS.accentPurple} delay={240} />
-                </View>
+                        {/* IMPACT BANNER */}
+                        <View style={styles.impactBanner}>
+                            <View style={styles.impactBannerBlob} />
+                            <View style={styles.impactLeft}>
+                                <Text style={styles.impactEmoji}>🌱</Text>
+                                <View>
+                                    <Text style={styles.impactTitle}>This month's impact</Text>
+                                    <Text style={styles.impactStat}>You helped feed <Text style={styles.impactHighlight}>{stats.peopleFed || 0} people</Text></Text>
+                                </View>
+                            </View>
+                            <View style={styles.impactBadge}>
+                                <Text style={styles.impactBadgeText}>Top NGO</Text>
+                            </View>
+                        </View>
 
-                {/* QUICK ACTIONS */}
-                {/* <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-                    <View style={styles.actionsRow}>
-                        {[
-                            { icon: "food-fork-drink", label: "Browse\nFood", color: COLORS.primary, route: "available" },
-                            { icon: "clipboard-list-outline", label: "My\nRequests", color: COLORS.accentBlue, route: "requests" },
-                            { icon: "history", label: "Pickup\nHistory", color: COLORS.success, route: "history" },
-                            { icon: "account-outline", label: "Profile", color: COLORS.accentPurple, route: "profile" },
-                        ].map((a) => (
+                        {/* STATS GRID */}
+                        <View style={styles.statsGrid}>
+                            <StatCard icon="food-variant" number={stats.active || 0} label="Active Requests" color={COLORS.primary} delay={0} />
+                            <StatCard icon="check-circle" number={stats.completed || 0} label="Completed" color={COLORS.success} delay={80} />
+                            <StatCard icon="truck-delivery" number={stats.totalPickups || 0} label="Total Pickups" color={COLORS.accentBlue} delay={160} />
+                            <StatCard icon="account-group" number={stats.peopleFed || 0} label="People Served" color={COLORS.accentPurple} delay={240} />
+                        </View>
+
+                        {/* RECENT ACTIVITY */}
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                                <TouchableOpacity>
+                                    <Text style={styles.seeAll}>See all</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.activityCard}>
+                                {activity.map((item, i) => (
+                                    <ActivityItem key={item._id || i} icon="check-circle" title={item.foodName || "Pickup"} time={item.updatedAt || ""} color={COLORS.success} />
+                                ))}
+                            </View>
+                        </View>
+
+                        <View style={{ height: 24 }} />
+                    </ScrollView>
+
+                    {/* Notifications Bottom Sheet */}
+                    <Modal visible={showNotifications} transparent animationType="none" onRequestClose={closeNotifs}>
+                        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeNotifs} />
+                        <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}> 
+                            <View style={styles.sheetHandle} />
+                            <View style={styles.sheetHeader}>
+                                <Text style={styles.sheetTitle}>Notifications</Text>
+                                <TouchableOpacity onPress={closeNotifs}>
+                                    <MaterialCommunityIcons name="close" size={22} color={COLORS.textDark} />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                                {notifs.map((n) => (
+                                    <NotificationItem key={n.id || n._id} {...n} />
+                                ))}
+                            </ScrollView>
+                        </Animated.View>
+                    </Modal>
+                </View>
+            );
                             <TouchableOpacity key={a.label} style={styles.actionBtn} activeOpacity={0.8}>
                                 <View style={[styles.actionIconWrap, { backgroundColor: a.color + "18" }]}>
                                     <MaterialCommunityIcons name={a.icon} size={22} color={a.color} />

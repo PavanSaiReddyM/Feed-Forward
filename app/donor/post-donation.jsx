@@ -10,6 +10,7 @@ import * as Location from "expo-location";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { useRouter } from "expo-router";
 import { COLORS } from "../../_constants/colors";
+import { postDonation } from "../services/api";
 
 // ─── Food type config with icons ─────────────────────────────────────────────
 const FOOD_TYPES = [
@@ -357,10 +358,28 @@ export default function PostDonation() {
     { text: "Cancel", style: "cancel" },
   ]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setLoading(true);
-    // TODO: POST /api/donations
-    setTimeout(() => { setLoading(false); setSubmitted(true); }, 1200);
+    try {
+      // Prepare payload
+      const payload = {
+        foodName,
+        foodType,
+        quantity,
+        expiry,
+        location,
+        locationCoords: locationCoords ? JSON.stringify(locationCoords) : undefined,
+        pickupTime,
+        note,
+        imageUri,
+      };
+      const food = await postDonation(payload);
+      setLoading(false);
+      setSubmitted(food);
+    } catch (err) {
+      setLoading(false);
+      Alert.alert("Error", err.message || "Could not post donation. Please try again.");
+    }
   };
 
   const handleReset = () => {
@@ -378,6 +397,18 @@ export default function PostDonation() {
           <View style={styles.headerTop}>
             <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
               <MaterialCommunityIcons name="arrow-left" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {/* Pass food object to SuccessView */}
+        <SuccessView onReset={handleReset} data={{
+          foodName: submitted.foodName,
+          quantity: submitted.quantity,
+          pickupTime: submitted.pickupTime,
+        }} />
+      </View>
+    );
+  }
             </TouchableOpacity>
           </View>
           <Text style={styles.headerTitle}>Donation Posted</Text>

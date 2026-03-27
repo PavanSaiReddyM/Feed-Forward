@@ -6,33 +6,9 @@ import { useRef, useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
+import { getNgoRequests } from "../services/api";
 
-const REQUESTS = [
-    {
-        id: "1", food: "Dal Makhani & Roti", donor: "Moti Mahal Restaurant", qty: "12 kg",
-        category: "Cooked Meal", date: "Mar 19, 2026", deadline: "5:00 PM today",
-        status: "Approved", location: "Connaught Place, Delhi",
-        donorLocation: { latitude: 28.6315, longitude: 77.2167 },
-    },
-    {
-        id: "2", food: "Fresh Bread Loaves", donor: "Delhi Bakers", qty: "20 pcs",
-        category: "Bakery", date: "Mar 19, 2026", deadline: "6:00 PM today",
-        status: "Pending", location: "Karol Bagh, Delhi",
-        donorLocation: { latitude: 28.6519, longitude: 77.1909 },
-    },
-    {
-        id: "3", food: "Mixed Vegetables", donor: "INA Sabzi Wala", qty: "8 kg",
-        category: "Produce", date: "Mar 18, 2026", deadline: "Completed",
-        status: "Collected", location: "INA Market, Delhi",
-        donorLocation: { latitude: 28.5733, longitude: 77.2090 },
-    },
-    {
-        id: "4", food: "Biryani (Event Pack)", donor: "Spice Route Caterers", qty: "15 kg",
-        category: "Cooked Meal", date: "Mar 18, 2026", deadline: "Expired",
-        status: "Cancelled", location: "Lajpat Nagar, Delhi",
-        donorLocation: { latitude: 28.5677, longitude: 77.2433 },
-    },
-];
+
 
 const STATUS_CFG = {
     Pending: { color: "#F59E0B", bg: "#FFF8EB", icon: "clock-outline", label: "Pending Approval" },
@@ -153,19 +129,50 @@ function RequestCard({ item, index }) {
     );
 }
 
-export default function Requests() {
     const [filter, setFilter] = useState("All");
-    const filtered = filter === "All" ? REQUESTS : REQUESTS.filter(r => r.status === filter);
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        let mounted = true;
+        getNgoRequests()
+            .then((data) => {
+                if (mounted) setRequests(data);
+            })
+            .catch((err) => {
+                if (mounted) setError(err.message || "Failed to load requests");
+            })
+            .finally(() => {
+                if (mounted) setLoading(false);
+            });
+        return () => { mounted = false; };
+    }, []);
+
+    // Map backend data to UI format
+    const mappedRequests = requests.map((r) => ({
+        id: r._id,
+        food: r.foodId?.name || "Food",
+        donor: r.foodId?.donor || "Donor",
+        qty: r.foodId?.quantity || "-",
+        category: r.foodId?.category || "-",
+        date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "-",
+        deadline: r.foodId?.pickupTime || "-",
+        status: r.status.charAt(0).toUpperCase() + r.status.slice(1),
+        location: r.foodId?.location || "-",
+        donorLocation: r.foodId?.locationCoords || {},
+    }));
+
+    const filtered = filter === "All" ? mappedRequests : mappedRequests.filter(r => r.status === filter);
 
     const counts = {
-        Pending: REQUESTS.filter(r => r.status === "Pending").length,
-        Approved: REQUESTS.filter(r => r.status === "Approved").length,
-        Collected: REQUESTS.filter(r => r.status === "Collected").length,
+        Pending: mappedRequests.filter(r => r.status === "Pending").length,
+        Approved: mappedRequests.filter(r => r.status === "Approved").length,
+        Collected: mappedRequests.filter(r => r.status === "Collected").length,
     };
 
     return (
         <View style={styles.root}>
-
             {/* Header */}
             <View style={styles.header}>
                 <View style={styles.headerBlob} />
@@ -206,20 +213,24 @@ export default function Requests() {
             </View>
 
             {/* Cards */}
-            <FlatList
-                data={filtered}
-                keyExtractor={r => r.id}
-                contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 6 }}
-                showsVerticalScrollIndicator={false}
-                renderItem={({ item, index }) => <RequestCard item={item} index={index} />}
-                ListEmptyComponent={
-                    <View style={styles.empty}>
-                        <MaterialCommunityIcons name="clipboard-list-outline" size={52} color={COLORS.grayText} />
-                        <Text style={styles.emptyTitle}>No requests found</Text>
-                        <Text style={styles.emptySub}>Browse Available Food to make a request</Text>
-                    </View>
-                }
-            />
+            {error ? (
+                <Text style={{ color: 'red', textAlign: 'center', marginTop: 30 }}>{error}</Text>
+            ) : (
+                <FlatList
+                    data={filtered}
+                    keyExtractor={r => r.id}
+                    contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 6 }}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item, index }) => <RequestCard item={item} index={index} />}
+                    ListEmptyComponent={
+                        <View style={styles.empty}>
+                            <MaterialCommunityIcons name="clipboard-list-outline" size={52} color={COLORS.grayText} />
+                            <Text style={styles.emptyTitle}>No requests found</Text>
+                            <Text style={styles.emptySub}>Browse Available Food to make a request</Text>
+                        </View>
+                    }
+                />
+            )}
         </View>
     );
 }

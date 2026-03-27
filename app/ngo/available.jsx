@@ -2,61 +2,13 @@ import {
     StyleSheet, Text, View, FlatList,
     TouchableOpacity, Animated, Platform,
 } from "react-native";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS } from "../../_constants/colors";
+import { getNearbyFood, requestFood } from "../services/api";
 
-const DONATIONS = [
-    {
-        id: "1",
-        name: "Dal Makhani & Roti",
-        quantity: "12 kg",
-        location: "Connaught Place, New Delhi",
-        donor: "Moti Mahal Restaurant",
-        time: "Pickup by 4:00 PM",
-        category: "Cooked Meal",
-        distance: "1.1 km",
-        urgent: true,
-        donorLocation: { latitude: 28.6315, longitude: 77.2167 },
-    },
-    {
-        id: "2",
-        name: "Bread & Pastries",
-        quantity: "30 pcs",
-        location: "Karol Bagh, New Delhi",
-        donor: "Delhi Bakers",
-        time: "Pickup by 6:00 PM",
-        category: "Bakery",
-        distance: "2.8 km",
-        urgent: false,
-        donorLocation: { latitude: 28.6519, longitude: 77.1909 },
-    },
-    {
-        id: "3",
-        name: "Fresh Vegetables",
-        quantity: "18 kg",
-        location: "INA Market, New Delhi",
-        donor: "INA Sabzi Wala",
-        time: "Pickup by 5:30 PM",
-        category: "Produce",
-        distance: "3.2 km",
-        urgent: false,
-        donorLocation: { latitude: 28.5733, longitude: 77.2090 },
-    },
-    {
-        id: "4",
-        name: "Biryani (Event Leftover)",
-        quantity: "10 kg",
-        location: "Lajpat Nagar, New Delhi",
-        donor: "Spice Route Caterers",
-        time: "Pickup by 3:30 PM",
-        category: "Cooked Meal",
-        distance: "0.9 km",
-        urgent: true,
-        donorLocation: { latitude: 28.5677, longitude: 77.2433 },
-    },
-];
+
 
 const CATEGORY_COLORS = {
     "Cooked Meal": { color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
@@ -141,25 +93,50 @@ function DonationCard({ item, index, onNavigate, onRequest }) {
 
 export default function AvailableFood() {
     const router = useRouter();
+    const [donations, setDonations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Fetch available food donations on mount
+    useEffect(() => {
+        let mounted = true;
+        getNearbyFood()
+            .then((data) => {
+                if (mounted) setDonations(data);
+            })
+            .catch((err) => {
+                if (mounted) setError(err.message || "Failed to load donations");
+            })
+            .finally(() => {
+                if (mounted) setLoading(false);
+            });
+        return () => { mounted = false; };
+    }, []);
 
     const onNavigate = (item) => {
         router.push({
             pathname: "/ngo/pickup-map",
             params: {
-                pickupId: item.id,
+                pickupId: item._id || item.id,
                 foodName: item.name,
                 donor: item.donor,
                 address: item.location,
                 deadline: item.time,
-                latitude: item.donorLocation.latitude,
-                longitude: item.donorLocation.longitude,
+                latitude: item.donorLocation?.latitude,
+                longitude: item.donorLocation?.longitude,
             },
         });
     };
 
-    const onRequest = (item) => {
-        // TODO: POST /api/requests — { foodId: item.id, ngoId: currentUser._id }
-        alert(`Request sent for ${item.name}!`);
+    const onRequest = async (item) => {
+        try {
+            // Assume current user info is available via context or AsyncStorage
+            // For now, only send foodId; backend should get ngoId from token
+            await requestFood({ foodId: item._id || item.id });
+            alert(`Request sent for ${item.name}!`);
+        } catch (err) {
+            alert(err.message || "Failed to send request");
+        }
     };
 
     const headerFade = useRef(new Animated.Value(0)).current;
@@ -173,35 +150,47 @@ export default function AvailableFood() {
 
     return (
         <View style={styles.container}>
-
             {/* ── HEADER ── */}
             <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
                 <View style={styles.headerBlob} />
                 <View>
                     <Text style={styles.title}>Available Food</Text>
-                    <Text style={styles.subtitle}>{DONATIONS.length} donations near you</Text>
+                    <Text style={styles.subtitle}>
+                        {loading ? "Loading..." : `${donations.length} donations near you`}
+                    </Text>
                 </View>
                 <View style={styles.statPill}>
                     <MaterialCommunityIcons name="clock-alert-outline" size={13} color="#F59E0B" />
-                    <Text style={styles.statPillText}>{DONATIONS.filter(d => d.urgent).length} urgent</Text>
+                    <Text style={styles.statPillText}>
+                        {loading ? "-" : donations.filter(d => d.urgent).length} urgent
+                    </Text>
                 </View>
             </Animated.View>
 
             {/* ── LIST ── */}
-            <FlatList
-                data={DONATIONS}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item, index }) => (
-                    <DonationCard
-                        item={item}
-                        index={index}
-                        onNavigate={onNavigate}
-                        onRequest={onRequest}
-                    />
-                )}
-                contentContainerStyle={styles.listContent}
-                showsVerticalScrollIndicator={false}
-            />
+            {error ? (
+                <Text style={{ color: 'red', textAlign: 'center', marginTop: 30 }}>{error}</Text>
+            ) : (
+                <FlatList
+                    data={donations}
+                    keyExtractor={(item) => item._id || item.id}
+                    renderItem={({ item, index }) => (
+                        <DonationCard
+                            item={item}
+                            index={index}
+                            onNavigate={onNavigate}
+                            onRequest={onRequest}
+                        />
+                    )}
+                    contentContainerStyle={styles.listContent}
+                    showsVerticalScrollIndicator={false}
+                    ListEmptyComponent={!loading && (
+                        <Text style={{ textAlign: 'center', marginTop: 40, color: COLORS.grayText }}>
+                            No donations available nearby.
+                        </Text>
+                    )}
+                />
+            )}
         </View>
     );
 }

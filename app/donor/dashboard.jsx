@@ -3,54 +3,15 @@ import {
   Animated, Platform, Dimensions, Modal, Easing, Pressable,
 } from "react-native";
 import { useEffect, useRef, useState } from "react";
+import { getDonorDashboard } from "../services/api";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS } from "../../_constants/colors";
 
 const { width } = Dimensions.get("window");
 
-// ─── Data ───────────────────────────────────────────────────────────────────
-const STATS = [
-  { icon: "weight-kilogram", value: 125, label: "kg Donated", color: "#FF6B2B", bg: "#FFF0EB" },
-  { icon: "hand-heart-outline", value: 3, label: "Active Now", color: "#2D6A4F", bg: "#EAF5EF" },
-  { icon: "check-decagram", value: 42, label: "Completed", color: "#2B7FFF", bg: "#EBF2FF" },
-  { icon: "account-group", value: 350, label: "People Fed", color: "#7C3AED", bg: "#F3EEFF" },
-];
+// ─── Data from backend ─────────────────────────────────────────────────────
 
-const ACTIVITY = [
-  {
-    id: "1", icon: "check-circle", color: "#2D6A4F", bg: "#EAF5EF",
-    title: "50 kg Rice collected",
-    ngo: "Hope Foundation", time: "2 days ago",
-    status: "Completed", statusColor: "#2D6A4F", statusBg: "#EAF5EF",
-    detail: "15 kg Basmati + 35 kg Sona Masuri · Collected at 3:30 PM · Served ~100 people",
-    live: false,
-  },
-  {
-    id: "2", icon: "truck-delivery", color: "#2B7FFF", bg: "#EBF2FF",
-    title: "Fresh Fruits pickup today",
-    ngo: "Robin Hood Army", time: "Today, 4:00 PM",
-    status: "En Route", statusColor: "#2B7FFF", statusBg: "#EBF2FF",
-    detail: "Assorted fruits 8 kg · NGO is 1.2 km away and en route to your location",
-    live: true,
-  },
-  {
-    id: "3", icon: "clock-outline", color: "#F59E0B", bg: "#FFF8EB",
-    title: "Bakery Items request",
-    ngo: "Awaiting NGO match", time: "1 hour ago",
-    status: "Pending", statusColor: "#F59E0B", statusBg: "#FFF8EB",
-    detail: "Bread & pastries 5 kg · Expires in 3 hours · 3 NGOs notified nearby",
-    live: false,
-  },
-];
-
-const NOTIFICATIONS = [
-  { id: 1, icon: "check-circle", color: "#2D6A4F", title: "Donation Accepted", msg: "Hope Foundation accepted your Rice & Curry donation (15 kg).", time: "2 hr ago", unread: true },
-  { id: 2, icon: "truck-delivery", color: "#2B7FFF", title: "Pickup Scheduled", msg: "Fresh Fruits pickup confirmed for today at 4:00 PM.", time: "5 hr ago", unread: true },
-  { id: 3, icon: "clock-alert", color: "#F59E0B", title: "Expiry Alert", msg: "Bread & Pastries expires in 2 hours. NGO notified.", time: "3 hr ago", unread: false },
-  { id: 4, icon: "star-circle", color: "#7C3AED", title: "Milestone 🎉", msg: "You've helped feed 350 people. Amazing impact!", time: "Yesterday", unread: false },
-  { id: 5, icon: "account-check", color: "#F59E0B", title: "NGO Matched", msg: "Helping Hands NGO is interested in your Vegetable donation.", time: "2 days ago", unread: false },
-];
 
 // ─── Animated number counter ─────────────────────────────────────────────────
 function useCounter(target, delay = 0) {
@@ -274,11 +235,19 @@ export default function Dashboard() {
   const heroAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(500)).current;
   const [showNotifs, setShowNotifs] = useState(false);
-  const [notifs, setNotifs] = useState(NOTIFICATIONS);
+  const [dashboard, setDashboard] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notifs, setNotifs] = useState([]);
   const unread = notifs.filter(n => n.unread).length;
 
   useEffect(() => {
     Animated.timing(heroAnim, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    getDonorDashboard().then(data => {
+      setDashboard(data);
+      setNotifs(data.notifications || []);
+    }).catch(e => {
+      // Optionally handle error
+    }).finally(() => setLoading(false));
   }, []);
 
   const openNotifs = () => {
@@ -291,6 +260,21 @@ export default function Dashboard() {
   };
   const markAllRead = () => setNotifs(n => n.map(x => ({ ...x, unread: false })));
 
+  if (loading) {
+    return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><Text>Loading...</Text></View>;
+  }
+
+  const stats = dashboard?.stats || {};
+  const activity = dashboard?.activity || [];
+
+  // Map backend stats to UI cards
+  const STATS = [
+    { icon: "weight-kilogram", value: stats.totalDonations || 0, label: "Donations", color: "#FF6B2B", bg: "#FFF0EB" },
+    { icon: "hand-heart-outline", value: stats.active || 0, label: "Active Now", color: "#2D6A4F", bg: "#EAF5EF" },
+    { icon: "check-decagram", value: stats.completed || 0, label: "Completed", color: "#2B7FFF", bg: "#EBF2FF" },
+    { icon: "account-group", value: stats.peopleFed || 0, label: "People Fed", color: "#7C3AED", bg: "#F3EEFF" },
+  ];
+
   return (
     <View style={styles.root}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
@@ -299,7 +283,7 @@ export default function Dashboard() {
         <Animated.View style={[styles.hero, {
           opacity: heroAnim,
           transform: [{ translateY: heroAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
-        }]}>
+        }]}> 
           <View style={styles.blob1} />
           <View style={styles.blob2} />
 
@@ -307,7 +291,8 @@ export default function Dashboard() {
           <View style={styles.heroTop}>
             <View>
               <Text style={styles.heroGreeting}>Good morning 👋</Text>
-              <Text style={styles.heroName}>Pavan Moola</Text>
+              {/* TODO: Replace with actual user name */}
+              <Text style={styles.heroName}>Donor</Text>
             </View>
             <TouchableOpacity style={styles.bellBtn} onPress={openNotifs} activeOpacity={0.8}>
               <MaterialCommunityIcons name="bell-outline" size={22} color="#fff" />
@@ -327,9 +312,9 @@ export default function Dashboard() {
             <View style={styles.heroImpactRight}>
               <Text style={styles.heroImpactLabel}>Your total impact</Text>
               <Text style={styles.heroImpactMain}>
-                <Text style={styles.heroImpactHighlight}>125 kg</Text> donated
+                <Text style={styles.heroImpactHighlight}>{stats.totalDonations || 0} kg</Text> donated
               </Text>
-              <Text style={styles.heroImpactSub}>≈ 350 meals served to people in need</Text>
+              <Text style={styles.heroImpactSub}>≈ {stats.peopleFed || 0} meals served to people in need</Text>
               <View style={styles.heroBadge}>
                 <MaterialCommunityIcons name="leaf" size={11} color="#fff" />
                 <Text style={styles.heroBadgeTxt}>Top Donor · This Month</Text>
@@ -379,15 +364,15 @@ export default function Dashboard() {
         {/* ══ RECENT DONATIONS (expandable) ══ */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Donations</Text>
-          <TouchableOpacity onPress={() => router.push("/donor/donation-history")}>
+          <TouchableOpacity onPress={() => router.push("/donor/donation-history")}> 
             <Text style={styles.seeAll}>See all →</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.sectionHint}>Tap a card to see details</Text>
 
         <View style={{ paddingHorizontal: 20, gap: 12 }}>
-          {ACTIVITY.map((item, i) => (
-            <ActivityCard key={item.id} item={item} index={i} />
+          {activity.map((item, i) => (
+            <ActivityCard key={item._id || item.id || i} item={item} index={i} />
           ))}
         </View>
 
@@ -398,7 +383,7 @@ export default function Dashboard() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.milestoneTitle}>You're making a difference!</Text>
-            <Text style={styles.milestoneSub}>42 donations · 350 people fed this year</Text>
+            <Text style={styles.milestoneSub}>{stats.completed || 0} donations · {stats.peopleFed || 0} people fed this year</Text>
           </View>
           <MaterialCommunityIcons name="chevron-right" size={18} color="#F59E0B" />
         </View>
@@ -408,7 +393,7 @@ export default function Dashboard() {
       {/* ══ NOTIFICATION SHEET ══ */}
       <Modal visible={showNotifs} transparent animationType="none" onRequestClose={closeNotifs}>
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeNotifs} />
-        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}> 
           <View style={styles.sheetHandle} />
           <View style={styles.sheetTopRow}>
             <View>
@@ -425,7 +410,7 @@ export default function Dashboard() {
             </View>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
-            {notifs.map(n => <NotifItem key={n.id} item={n} />)}
+            {notifs.map(n => <NotifItem key={n.id || n._id} item={n} />)}
           </ScrollView>
         </Animated.View>
       </Modal>

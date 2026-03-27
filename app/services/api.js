@@ -1,3 +1,109 @@
+/**
+ * Get all requests made by the logged-in NGO.
+ * Returns an array of request objects.
+ */
+export async function getNgoRequests() {
+    return request("/requests", { method: "GET" });
+}
+/**
+ * Send a request for a food donation as an NGO.
+ * @param {Object} payload - { foodId, ngoId }
+ * Returns the created request object.
+ */
+export async function requestFood(payload) {
+    return request("/requests", { method: "POST", body: payload });
+}
+/**
+ * Cancel (delete) a food donation by ID.
+ * @param {string} id - Food donation ID
+ */
+export async function cancelDonation(id) {
+    return request(`/food/${id}`, { method: "DELETE" });
+}
+/**
+ * Get the current user's profile.
+ */
+export async function getProfile() {
+    return request("/auth/me", { method: "GET" });
+}
+
+/**
+ * Update the current user's profile.
+ * @param {Object} updates - { name, email, phone, location, address }
+ */
+export async function updateProfile(updates) {
+    return request("/auth/me", { method: "PUT", body: updates });
+}
+/**
+ * Get all delivered (and expired) donations posted by the logged-in donor.
+ * Returns an array of food objects.
+ */
+export async function getDonorDonationHistory() {
+    return request("/food/donor/history", { method: "GET" });
+}
+/**
+ * Get all active donations posted by the logged-in donor.
+ * Returns an array of food objects.
+ */
+export async function getDonorActiveDonations() {
+    return request("/food/donor", { method: "GET" });
+}
+/**
+ * Post a new food donation.
+ * @param {Object} payload - { foodName, foodType, quantity, expiry, location, locationCoords, pickupTime, note, imageUri }
+ * Returns the created food object.
+ */
+export async function postDonation(payload) {
+    // If imageUri is present, use multipart/form-data, else JSON
+    if (payload.imageUri) {
+        const token = await getToken();
+        const formData = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+            if (key === "imageUri" && value) {
+                // For React Native fetch, image must be { uri, name, type }
+                formData.append("image", {
+                    uri: value,
+                    name: "photo.jpg",
+                    type: "image/jpeg"
+                });
+            } else if (value !== undefined && value !== null) {
+                formData.append(key, value);
+            }
+        });
+        const res = await fetch(`${BASE_URL}/food`, {
+            method: "POST",
+            headers: {
+                "Authorization": token ? `Bearer ${token}` : undefined,
+                // 'Content-Type' should NOT be set for FormData in React Native
+            },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.msg || data.message || "Something went wrong");
+        return data;
+    } else {
+        return request("/food", { method: "POST", body: payload });
+    }
+}
+// ─── Dashboard API ─────────────────────────────────────────────────────────
+export async function getDonorDashboard() {
+    return request("/dashboard/donor", { method: "GET" });
+}
+
+export async function getNgoDashboard() {
+    return request("/dashboard/ngo", { method: "GET" });
+}
+
+export async function getAdminDashboard() {
+/**
+ * Get available food donations near the logged-in NGO.
+ * Returns an array of food objects.
+ */
+export async function getNearbyFood() {
+     return request("/food/nearby", { method: "GET" });
+}
+    return request("/dashboard/admin", { method: "GET" });
+}
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ─── Change this to your machine's local IP when testing on a physical device ──

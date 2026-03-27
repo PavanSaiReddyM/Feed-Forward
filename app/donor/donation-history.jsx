@@ -5,15 +5,9 @@ import {
 import { useRef, useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
+import { getDonorDonationHistory } from "../services/api";
 
-const HISTORY = [
-  { id: "1", name: "Dal Makhani & Roti", qty: "12 kg", category: "Cooked Meal", ngo: "Helping Hands NGO", date: "Mar 15, 2026", meals: 24, status: "Collected" },
-  { id: "2", name: "Fresh Bread Loaves", qty: "20 pcs", category: "Bakery", ngo: "Robin Hood Army", date: "Mar 12, 2026", meals: 40, status: "Collected" },
-  { id: "3", name: "Mixed Vegetables", qty: "8 kg", category: "Produce", ngo: "Akshaya Patra", date: "Mar 10, 2026", meals: 16, status: "Collected" },
-  { id: "4", name: "Packaged Biscuits", qty: "5 kg", category: "Packaged", ngo: "Food For All", date: "Mar 8, 2026", meals: 20, status: "Collected" },
-  { id: "5", name: "Biryani (Event)", qty: "18 kg", category: "Cooked Meal", ngo: "Helping Hands NGO", date: "Mar 5, 2026", meals: 36, status: "Collected" },
-  { id: "6", name: "Milk Packets", qty: "10 L", category: "Beverages", ngo: null, date: "Mar 2, 2026", meals: 0, status: "Expired" },
-];
+
 
 const CAT_STYLE = {
   "Cooked Meal": { color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
@@ -94,13 +88,45 @@ function HistoryCard({ item, index, isLast }) {
   );
 }
 
+
 export default function DonationHistory() {
   const [filter, setFilter] = useState("All");
-  const filtered = filter === "All" ? HISTORY : HISTORY.filter(h => h.status === filter);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalMeals = HISTORY.reduce((s, h) => s + h.meals, 0);
-  const totalDonations = HISTORY.filter(h => h.status === "Collected").length;
-  const totalKg = HISTORY.filter(h => h.status === "Collected").reduce((s, h) => s + parseFloat(h.qty), 0);
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await getDonorDonationHistory();
+        // Map backend data to frontend format
+        const mapped = data.map(d => ({
+          id: d._id,
+          name: d.foodName,
+          qty: d.quantity,
+          category: d.foodType || d.category,
+          ngo: d.acceptedByName || null, // Optionally populate NGO name if available
+          date: d.createdAt ? new Date(d.createdAt).toLocaleDateString() : "",
+          meals: d.meals || 0, // If you have a meals field
+          status: d.status === "delivered" ? "Collected" : "Expired", // Only delivered for now
+        }));
+        setHistory(mapped);
+      } catch (err) {
+        setHistory([]);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = filter === "All" ? history : history.filter(h => h.status === filter);
+
+  const totalMeals = history.reduce((s, h) => s + (h.meals || 0), 0);
+  const totalDonations = history.filter(h => h.status === "Collected").length;
+  const totalKg = history.filter(h => h.status === "Collected").reduce((s, h) => {
+    // Try to parse numbers from qty (e.g., "12 kg", "20 pcs", "10 L")
+    const match = h.qty && h.qty.match(/([\d.]+)/);
+    return s + (match ? parseFloat(match[1]) : 0);
+  }, 0);
 
   return (
     <View style={styles.root}>
@@ -139,22 +165,29 @@ export default function DonationHistory() {
       </View>
 
       {/* Timeline list */}
-      <FlatList
-        data={filtered}
-        keyExtractor={h => h.id}
-        contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 8 }}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => (
-          <HistoryCard item={item} index={index} isLast={index === filtered.length - 1} />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <MaterialCommunityIcons name="history" size={52} color={COLORS.grayText} />
-            <Text style={styles.emptyTitle}>No history yet</Text>
-            <Text style={styles.emptySub}>Your completed donations will appear here</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.empty}>
+          <MaterialCommunityIcons name="history" size={52} color={COLORS.grayText} />
+          <Text style={styles.emptyTitle}>Loading...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={h => h.id}
+          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 8 }}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <HistoryCard item={item} index={index} isLast={index === filtered.length - 1} />
+          )}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <MaterialCommunityIcons name="history" size={52} color={COLORS.grayText} />
+              <Text style={styles.emptyTitle}>No history yet</Text>
+              <Text style={styles.emptySub}>Your completed donations will appear here</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }

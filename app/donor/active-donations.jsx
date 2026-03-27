@@ -5,6 +5,7 @@ import {
 import { useRef, useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
+import { getDonorActiveDonations, cancelDonation } from "../services/api";
 
 const STATUS_CONFIG = {
   Waiting: { color: "#F59E0B", bg: "#FFF8EB", icon: "clock-outline", step: 0 },
@@ -15,28 +16,7 @@ const STATUS_CONFIG = {
 
 const STEPS = ["Posted", "Scheduled", "En Route", "Collected"];
 
-const DONATIONS = [
-  {
-    id: "1", name: "Dal Makhani & Roti", quantity: "12 kg", category: "Cooked Meal",
-    status: "En Route", postedAt: "Today, 10:30 AM", pickupBy: "5:00 PM",
-    ngo: "Helping Hands NGO", urgent: true,
-  },
-  {
-    id: "2", name: "Fresh Bread Loaves", quantity: "20 pcs", category: "Bakery",
-    status: "Scheduled", postedAt: "Today, 9:00 AM", pickupBy: "6:00 PM",
-    ngo: "Robin Hood Army", urgent: false,
-  },
-  {
-    id: "3", name: "Mixed Vegetables", quantity: "8 kg", category: "Produce",
-    status: "Waiting", postedAt: "Today, 8:15 AM", pickupBy: "4:00 PM",
-    ngo: null, urgent: false,
-  },
-  {
-    id: "4", name: "Biryani (Party Leftover)", quantity: "15 kg", category: "Cooked Meal",
-    status: "Collected", postedAt: "Yesterday", pickupBy: "Done",
-    ngo: "Akshaya Patra", urgent: false,
-  },
-];
+
 
 const CAT_STYLE = {
   "Cooked Meal": { color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
@@ -44,7 +24,7 @@ const CAT_STYLE = {
   "Produce": { color: "#2D6A4F", bg: "#EAF5EF", icon: "leaf" },
 };
 
-function DonationCard({ item, index }) {
+function DonationCard({ item, index, onCancel }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(28)).current;
   const sc = STATUS_CONFIG[item.status] || STATUS_CONFIG.Waiting;
@@ -58,9 +38,21 @@ function DonationCard({ item, index }) {
   }, []);
 
   const handleCancel = () =>
-    Alert.alert("Cancel Donation", `Cancel "${item.name}"?`, [
+    Alert.alert("Cancel Donation", `Cancel \"${item.name}\"?`, [
       { text: "Keep it", style: "cancel" },
-      { text: "Cancel Donation", style: "destructive" },
+      {
+        text: "Cancel Donation",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await cancelDonation(item.id);
+            Alert.alert("Donation cancelled");
+            if (onCancel) onCancel();
+          } catch (err) {
+            Alert.alert("Error", err.message || "Failed to cancel donation");
+          }
+        },
+      },
     ]);
 
   return (
@@ -148,25 +140,57 @@ function DonationCard({ item, index }) {
   );
 }
 
+
 export default function ActiveDonations() {
   const [filter, setFilter] = useState("All");
+  const [donations, setDonations] = useState([]);
+  const [loading, setLoading] = useState(true);
   const FILTERS = ["All", "Waiting", "Scheduled", "En Route", "Collected"];
-  const filtered = filter === "All" ? DONATIONS : DONATIONS.filter(d => d.status === filter);
+
+  const fetchDonations = async () => {
+    setLoading(true);
+    try {
+      const data = await getDonorActiveDonations();
+      const mapped = data.map(d => ({
+        ...d,
+        id: d._id,
+        name: d.foodName,
+        category: d.foodType || d.category,
+        status:
+          d.status === "available" ? "Waiting" :
+          d.status === "accepted" ? "Scheduled" :
+          d.status === "picked" ? "En Route" :
+          d.status === "delivered" ? "Collected" : d.status,
+        postedAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : "",
+        pickupBy: d.pickupTime || "-",
+        ngo: d.acceptedByName || null,
+        urgent: false
+      }));
+      setDonations(mapped);
+    } catch (err) {
+      setDonations([]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchDonations(); }, []);
+
+  const filtered = filter === "All" ? donations : donations.filter(d => d.status === filter);
 
   const summary = [
     {
       label: "Active", icon: "timer-sand",
-      value: DONATIONS.filter(d => d.status !== "Collected").length,
+      value: donations.filter(d => d.status !== "Collected").length,
       color: "#FF6B2B", cardBg: "rgba(255,255,255,0.18)", iconBg: "rgba(255,107,43,0.25)",
     },
     {
       label: "Collected", icon: "check-circle-outline",
-      value: DONATIONS.filter(d => d.status === "Collected").length,
+      value: donations.filter(d => d.status === "Collected").length,
       color: "#74C69D", cardBg: "rgba(255,255,255,0.18)", iconBg: "rgba(116,198,157,0.25)",
     },
     {
       label: "Total", icon: "view-list-outline",
-      value: DONATIONS.length,
+      value: donations.length,
       color: "#fff", cardBg: "rgba(255,255,255,0.12)", iconBg: "rgba(255,255,255,0.2)",
     },
   ];
@@ -227,20 +251,27 @@ export default function ActiveDonations() {
       </View>
 
       {/* List */}
-      <FlatList
-        data={filtered}
-        keyExtractor={d => d.id}
-        contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 6 }}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item, index }) => <DonationCard item={item} index={index} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <MaterialCommunityIcons name="inbox-outline" size={52} color={COLORS.grayText} />
-            <Text style={styles.emptyTitle}>No donations here</Text>
-            <Text style={styles.emptySub}>Try a different filter</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.empty}>
+          <MaterialCommunityIcons name="inbox-outline" size={52} color={COLORS.grayText} />
+          <Text style={styles.emptyTitle}>Loading...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={d => d.id}
+          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100, paddingTop: 6 }}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => <DonationCard item={item} index={index} onCancel={fetchDonations} />}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <MaterialCommunityIcons name="inbox-outline" size={52} color={COLORS.grayText} />
+              <Text style={styles.emptyTitle}>No donations here</Text>
+              <Text style={styles.emptySub}>Try a different filter</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }

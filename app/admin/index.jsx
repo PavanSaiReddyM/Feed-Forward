@@ -3,58 +3,13 @@ import {
     Modal, FlatList, Animated, Easing, Platform, Alert,
 } from "react-native";
 import { useState, useRef, useEffect } from "react";
+import { getAdminDashboard } from "../services/api";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
-const KPI = [
-    { id: "meals", label: "Meals Saved", value: "15,420", delta: "+22%", up: true, icon: "food-variant", color: "#FF6B2B", bg: "#FFF0EB" },
-    { id: "donors", label: "Active Donors", value: "312", delta: "+8%", up: true, icon: "account-heart", color: "#2B7FFF", bg: "#EBF2FF" },
-    { id: "ngos", label: "Verified NGOs", value: "45", delta: "+3", up: true, icon: "domain", color: "#2D6A4F", bg: "#EAF5EF" },
-    { id: "pending", label: "Pending Review", value: "7", delta: "+2", up: false, icon: "clock-alert-outline", color: "#F59E0B", bg: "#FFF8EB" },
-];
-
-const WEEKLY = {
-    labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    meals: [820, 1100, 760, 1340, 1560, 1200, 1890],
-    donors: [18, 24, 15, 31, 28, 22, 35],
-    revenue: [0, 0, 0, 0, 0, 0, 0],  // free platform
-};
-
-const TOP_DONORS = [
-    { rank: 1, name: "Taj Hotels Group", meals: 2840, trend: "+18%", up: true },
-    { rank: 2, name: "BigBasket Delhi", meals: 1920, trend: "+12%", up: true },
-    { rank: 3, name: "Moti Mahal", meals: 1340, trend: "+5%", up: true },
-    { rank: 4, name: "ITC Hotels", meals: 980, trend: "-3%", up: false },
-    { rank: 5, name: "Haldiram's Pvt Ltd", meals: 760, trend: "+9%", up: true },
-];
-
-const TOP_NGOS = [
-    { rank: 1, name: "Helping Hands NGO", pickups: 148, city: "Delhi" },
-    { rank: 2, name: "Green Earth Found.", pickups: 112, city: "Mumbai" },
-    { rank: 3, name: "Akshaya Patra", pickups: 98, city: "Bengaluru" },
-    { rank: 4, name: "Robin Hood Army", pickups: 76, city: "Hyderabad" },
-    { rank: 5, name: "Zomato Feeding Ind.", pickups: 64, city: "Chennai" },
-];
-
-const ACTIVITY = [
-    { icon: "shield-check", color: "#2D6A4F", title: "NGO verified — Green Earth Foundation", time: "12 min ago" },
-    { icon: "alert-circle", color: "#F59E0B", title: "Complaint flagged — User #1284 reported", time: "45 min ago" },
-    { icon: "account-plus", color: "#2B7FFF", title: "New donor registered — Taj Hotel Chandigarh", time: "1 hr ago" },
-    { icon: "food-variant", color: "#FF6B2B", title: "Large donation posted — 500 kg Rice (Haldirams)", time: "2 hr ago" },
-    { icon: "close-circle", color: "#EF4444", title: "Donation expired — Bread Packets (Fresh Bakers)", "time": "3 hr ago" },
-    { icon: "account-check", color: "#2D6A4F", title: "Donor KYC approved — Spice Garden Delhi", time: "5 hr ago" },
-];
-
-const NOTIFICATIONS = [
-    { id: "1", title: "NGO Verification Request", msg: "Green Earth Foundation submitted documents.", time: "10 min", unread: true, icon: "domain", color: "#FF6B2B" },
-    { id: "2", title: "Large Donation Alert", msg: "500 kg rice posted by Tech Corp.", time: "1 hr", unread: true, icon: "food-variant", color: "#2D6A4F" },
-    { id: "3", title: "Weekly Report Ready", msg: "Analytics report for this week is ready.", time: "5 hr", unread: false, icon: "file-chart", color: "#2B7FFF" },
-    { id: "4", title: "User Flagged", msg: "Suspicious login for User #1234.", time: "1 day", unread: false, icon: "alert-circle", color: "#F59E0B" },
-];
-
-const TABS = ["Overview", "Donations", "Users & NGOs"];
+// Data will be loaded from backend
 
 // ─── Bar Chart ────────────────────────────────────────────────────────────────
 // Each bar grows up with staggered spring. Last bar gets full color + shadow.
@@ -295,140 +250,157 @@ export default function AdminDashboard() {
     const [showNotifs, setShowNotifs] = useState(false);
     const [notifData, setNotifData] = useState(NOTIFICATIONS);
     const notifAnim = useRef(new Animated.Value(600)).current;
-    const tabAnim = useRef(new Animated.Value(0)).current;
+    export default function AdminDashboard() {
+        const [tab, setTab] = useState(0);
+        const [showNotif, setShowNotif] = useState(false);
+        const slideAnim = useRef(new Animated.Value(400)).current;
+        const [dashboard, setDashboard] = useState(null);
+        const [loading, setLoading] = useState(true);
+        const [notifs, setNotifs] = useState([]);
 
-    const openNotifs = () => {
-        setShowNotifs(true);
-        Animated.spring(notifAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
-    };
-    const closeNotifs = () => {
-        Animated.timing(notifAnim, { toValue: 600, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setShowNotifs(false));
-    };
-    const markAllRead = () => setNotifData(d => d.map(n => ({ ...n, unread: false })));
-    const unreadCount = notifData.filter(n => n.unread).length;
+        useEffect(() => {
+            getAdminDashboard().then(data => {
+                setDashboard(data);
+                setNotifs(data.notifications || []);
+            }).catch(e => {
+                // Optionally handle error
+            }).finally(() => setLoading(false));
+        }, []);
 
-    const switchTab = (i) => {
-        Animated.timing(tabAnim, { toValue: 0, duration: 80, useNativeDriver: true }).start(() => {
-            setTab(i);
-            tabAnim.setValue(0);
-            Animated.timing(tabAnim, { toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-        });
-    };
+        const openNotifs = () => {
+            setShowNotif(true);
+            Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }).start();
+        };
+        const closeNotifs = () => {
+            Animated.timing(slideAnim, { toValue: 400, duration: 250, easing: Easing.in(Easing.cubic), useNativeDriver: true })
+                .start(() => setShowNotif(false));
+        };
 
-    return (
-        <View style={styles.root}>
+        if (loading) {
+            return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><Text>Loading...</Text></View>;
+        }
 
-            {/* ── HEADER ── */}
-            <View style={styles.header}>
-                <View style={styles.headerBlob1} />
-                <View style={styles.headerBlob2} />
-                <View style={styles.headerTop}>
-                    <View>
-                        <Text style={styles.headerEyebrow}>Admin Panel · Food Saver</Text>
-                        <Text style={styles.headerTitle}>Analytics</Text>
+        const stats = dashboard?.stats || {};
+        const topDonors = dashboard?.topDonors || [];
+        const topNGOs = dashboard?.topNGOs || [];
+        const activity = dashboard?.activity || [];
+
+        // KPI cards
+        const KPI = [
+            { id: "meals", label: "Meals Saved", value: stats.totalMeals || 0, icon: "food-variant", color: "#FF6B2B", bg: "#FFF0EB" },
+            { id: "donors", label: "Active Donors", value: stats.totalDonors || 0, icon: "account-heart", color: "#2B7FFF", bg: "#EBF2FF" },
+            { id: "ngos", label: "Verified NGOs", value: stats.totalNGOs || 0, icon: "domain", color: "#2D6A4F", bg: "#EAF5EF" },
+            { id: "pending", label: "Pending Review", value: stats.pending || 0, icon: "clock-alert-outline", color: "#F59E0B", bg: "#FFF8EB" },
+        ];
+
+        return (
+            <View style={{ flex: 1, backgroundColor: "#F5F0EB" }}>
+                <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+                    {/* HEADER */}
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Admin Dashboard</Text>
+                        <TouchableOpacity style={styles.notifBtn} onPress={openNotifs}>
+                            <MaterialCommunityIcons name="bell-outline" size={22} color={COLORS.textDark} />
+                            <View style={styles.notifBadge} />
+                        </TouchableOpacity>
                     </View>
-                    <View style={styles.headerActions}>
-                        <TouchableOpacity style={styles.headerBtn} onPress={openNotifs}>
-                            <MaterialCommunityIcons name="bell-outline" size={20} color="#fff" />
-                            {unreadCount > 0 && (
-                                <View style={styles.notifBadge}>
-                                    <Text style={styles.notifBadgeText}>{unreadCount}</Text>
+
+                    {/* KPI GRID */}
+                    <View style={styles.kpiGrid}>
+                        {KPI.map((k, i) => (
+                            <View key={k.id} style={[styles.kpiCard, { backgroundColor: k.bg }]}> 
+                                <MaterialCommunityIcons name={k.icon} size={22} color={k.color} />
+                                <Text style={[styles.kpiValue, { color: k.color }]}>{k.value}</Text>
+                                <Text style={styles.kpiLabel}>{k.label}</Text>
+                            </View>
+                        ))}
+                    </View>
+
+                    {/* TOP DONORS/NGOS */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Top Donors</Text>
+                        <FlatList
+                            data={topDonors}
+                            keyExtractor={item => item.name}
+                            renderItem={({ item, index }) => (
+                                <View style={styles.topItem}>
+                                    <Text style={styles.topRank}>{index + 1}</Text>
+                                    <Text style={styles.topName}>{item.name}</Text>
+                                    <Text style={styles.topStat}>{item.meals} meals</Text>
                                 </View>
                             )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.headerBtn, { backgroundColor: "rgba(239,68,68,0.18)" }]}
-                            onPress={() =>
-                                Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-                                    { text: "Cancel", style: "cancel" },
-                                    { text: "Sign Out", style: "destructive", onPress: () => router.replace("/welcome") },
-                                ])
-                            }
-                        >
-                            <MaterialCommunityIcons name="logout" size={20} color="#EF4444" />
-                        </TouchableOpacity>
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={{ marginTop: 8 }}
+                        />
                     </View>
-                </View>
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Top NGOs</Text>
+                        <FlatList
+                            data={topNGOs}
+                            keyExtractor={item => item.name}
+                            renderItem={({ item, index }) => (
+                                <View style={styles.topItem}>
+                                    <Text style={styles.topRank}>{index + 1}</Text>
+                                    <Text style={styles.topName}>{item.name}</Text>
+                                    <Text style={styles.topStat}>{item.pickups} pickups</Text>
+                                </View>
+                            )}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={{ marginTop: 8 }}
+                        />
+                    </View>
 
-                {/* Summary strip */}
-                <View style={styles.summaryStrip}>
-                    {[
-                        { label: "Total Meals", value: "15.4k" },
-                        { label: "This Week", value: "1,890" },
-                        { label: "NGO Active", value: "45" },
-                    ].map((s, i) => (
-                        <View key={i} style={[styles.summaryItem, i < 2 && styles.summaryItemBorder]}>
-                            <Text style={styles.summaryValue}>{s.value}</Text>
-                            <Text style={styles.summaryLabel}>{s.label}</Text>
+                    {/* ACTIVITY FEED */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Recent Activity</Text>
+                        <FlatList
+                            data={activity}
+                            keyExtractor={(_, i) => i.toString()}
+                            renderItem={({ item }) => (
+                                <View style={styles.activityItem}>
+                                    <MaterialCommunityIcons name="check-circle" size={18} color={COLORS.success} />
+                                    <Text style={styles.activityTitle}>{item.foodName || item.title || "Activity"}</Text>
+                                    <Text style={styles.activityTime}>{item.updatedAt || ""}</Text>
+                                </View>
+                            )}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={{ marginTop: 8 }}
+                        />
+                    </View>
+
+                    <View style={{ height: 24 }} />
+                </ScrollView>
+
+                {/* Notifications Bottom Sheet */}
+                <Modal visible={showNotif} transparent animationType="none" onRequestClose={closeNotifs}>
+                    <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeNotifs} />
+                    <Animated.View style={[styles.bottomSheet, { transform: [{ translateY: slideAnim }] }]}> 
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.sheetHeader}>
+                            <Text style={styles.sheetTitle}>Notifications</Text>
+                            <TouchableOpacity onPress={closeNotifs}>
+                                <MaterialCommunityIcons name="close" size={22} color={COLORS.textDark} />
+                            </TouchableOpacity>
                         </View>
-                    ))}
-                </View>
-            </View>
-
-            {/* ── TABS ── */}
-            <View style={styles.tabBar}>
-                {TABS.map((t, i) => (
-                    <TouchableOpacity key={t} style={[styles.tabItem, tab === i && styles.tabItemActive]}
-                        onPress={() => switchTab(i)} activeOpacity={0.8}>
-                        <Text style={[styles.tabText, tab === i && styles.tabTextActive]}>{t}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* ── CONTENT ── */}
-            <Animated.ScrollView
-                style={{ opacity: tabAnim }}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
-            >
-
-                {/* ════════════ OVERVIEW TAB ════════════ */}
-                {tab === 0 && (
-                    <>
-                        {/* KPI Grid */}
-                        <View style={styles.kpiGrid}>
-                            {KPI.map(k => <KpiCard key={k.id} kpi={k} />)}
-                        </View>
-
-                        {/* Meals chart */}
-                        <SectionCard title="Meals Saved This Week" subtitle="Each unit = one meal portion (avg serving). 10 kg cooked food ≈ 20 meals.">
-                            <BarChart data={WEEKLY.meals} labels={WEEKLY.labels} color="#FF6B2B" />
-                        </SectionCard>
-
-                        {/* Donor signups chart */}
-                        <SectionCard title="New Donors" subtitle="Registrations per day this week">
-                            <LineChart data={WEEKLY.donors} labels={WEEKLY.labels} color="#2B7FFF" />
-                        </SectionCard>
-
-                        {/* Food category breakdown */}
-                        <SectionCard title="Food Category Breakdown" subtitle="By volume donated this month">
-                            {/* <Pending KYC
-                                data={[42, 28, 16, 9, 5]}
-                                labels={["Cooked", "Produce", "Packed", "Bakery", "Drinks"]}
-                                colors={["#FF6B2B", "#2D6A4F", "#2B7FFF", "#F59E0B", "#7C3AED"]}
-                                fullLabels={["Cooked Meals", "Raw Produce", "Packaged Food", "Bakery", "Beverages"]}
-                            /> */}
-                        </SectionCard>
-
-                        {/* Recent activity */}
-                        <SectionCard title="Recent Activity" subtitle="System events · live feed" action="View all">
-                            {ACTIVITY.map((a, i) => (
-                                <View key={i} style={[styles.activityRow, i < ACTIVITY.length - 1 && styles.activityRowBorder]}>
-                                    <View style={[styles.activityIcon, { backgroundColor: a.color + "18" }]}>
-                                        <MaterialCommunityIcons name={a.icon} size={16} color={a.color} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.activityTitle}>{a.title}</Text>
-                                        <Text style={styles.activityTime}>{a.time}</Text>
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+                            {notifs.map((n, i) => (
+                                <View key={n._id || i} style={styles.notifItem}>
+                                    <MaterialCommunityIcons name="alert-circle" size={22} color={COLORS.warning} />
+                                    <View style={styles.notifContent}>
+                                        <Text style={styles.notifTitle}>{n.title || n.msg || "Notification"}</Text>
+                                        <Text style={styles.notifMsg}>{n.description || n.reason || n.msg || ""}</Text>
+                                        <Text style={styles.notifTime}>{n.time || n.createdAt || ""}</Text>
                                     </View>
                                 </View>
                             ))}
-                        </SectionCard>
-                    </>
-                )}
-
-                {/* ════════════ DONATIONS TAB ════════════ */}
-                {tab === 1 && (
+                        </ScrollView>
+                    </Animated.View>
+                </Modal>
+            </View>
+        );
                     <>
                         {/* Donation KPIs */}
                         <View style={styles.metricRow}>

@@ -3,7 +3,8 @@ import {
   TextInput, ScrollView, Platform, Modal, Animated, Easing,
   KeyboardAvoidingView, Linking, Image, Alert,
 } from "react-native";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { getProfile, updateProfile } from "../services/api";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
@@ -71,12 +72,51 @@ function useSheet(initial = 600) {
 
 export default function DonorProfile() {
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState("Pavan Moola");
-  const [email, setEmail] = useState("psr@gmail.com");
-  const [phone, setPhone] = useState("9876543210");
-  const [address, setAddress] = useState("Hyderabad, Telangana");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const router = useRouter();
   const [photoUri, setPhotoUri] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch profile on mount
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getProfile();
+        setName(data.name || "");
+        setEmail(data.email || "");
+        setPhone(data.phone || "");
+        setAddress(data.address || data.location || "");
+      } catch (err) {
+        setError("Failed to load profile");
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  // Save profile changes
+  const handleSave = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const updated = await updateProfile({ name, email, phone, address });
+      setName(updated.name || "");
+      setEmail(updated.email || "");
+      setPhone(updated.phone || "");
+      setAddress(updated.address || updated.location || "");
+      setIsEditing(false);
+      Alert.alert("Profile updated");
+    } catch (err) {
+      setError("Failed to update profile");
+      Alert.alert("Error", err.message || "Failed to update profile");
+    }
+    setLoading(false);
+  };
 
   const pickPhoto = async (source) => {
     try {
