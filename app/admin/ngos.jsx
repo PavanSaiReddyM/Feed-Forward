@@ -3,42 +3,73 @@ import {
     StyleSheet, Text, View, FlatList,
     TouchableOpacity,
 } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
-const STATUS_TABS = ["All", "Pending", "Verified", "Rejected"];
+import { getNGOs, verifyNGO, blockNGO } from "../services/api";
+
+const STATUS_TABS = ["All", "Verified", "Pending"];
+
 export default function NGOs() {
     const [activeTab, setActiveTab] = useState("All");
-    const [ngoList, setNgoList] = useState([
-        {
-            id: "1", name: "Helping Hands NGO", location: "Hyderabad, Telangana",
-            date: "Joined 2 days ago", status: "Pending", initials: "HH",
-            docs: ["Registration.pdf", "Tax Exemption.pdf"],
-            members: 12,
-        },
-        {
-            id: "2", name: "Care Foundation", location: "Secunderabad, Telangana",
-            date: "Joined 5 hours ago", status: "Pending", initials: "CF",
-            docs: ["Reg Certificate.pdf"],
-            members: 8,
-        },
-        {
-            id: "3", name: "Food For All", location: "Hitech City, Hyderabad",
-            date: "Joined 1 day ago", status: "Verified", initials: "FA",
-            verifiedOn: "10 Feb 2026",
-            docs: ["Reg Certificate.pdf", "NGO12 License.pdf"],
-            members: 25,
-        },
-        {
-            id: "4", name: "Green Earth Society", location: "Secunderabad",
-            date: "Joined 3 days ago", status: "Rejected", initials: "GE",
-            docs: [],
-            members: 4,
-        },
-    ]);
+    const [ngoList, setNgoList] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    const updateStatus = (id, newStatus) => {
-        setNgoList((prev) => prev.map((n) => n.id === id ? { ...n, status: newStatus } : n));
+    // Fetch NGOs on mount
+    useEffect(() => {
+        let mounted = true;
+
+        const fetchNGOs = async () => {
+            try {
+                setLoading(true);
+                const data = await getNGOs();
+                // Filter only NGOs from the user list
+                const ngos = data.filter(user => user.role === "ngo").map(user => ({
+                    ...user,
+                    id: user._id,
+                    initials: user.name.split(" ").map(n => n[0]).join("").toUpperCase(),
+                    status: user.isVerified ? "Verified" : "Pending",
+                }));
+                if (mounted) setNgoList(ngos);
+            } catch (err) {
+                if (mounted) setError(err.message || "Failed to load NGOs");
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+
+        fetchNGOs();
+        return () => { mounted = false; };
+    }, []);
+
+    const handleVerify = async (id) => {
+        try {
+            await verifyNGO(id);
+            // Update local state
+            setNgoList((prev) =>
+                prev.map((n) => n.id === id ? { ...n, status: "Verified", isVerified: true } : n)
+            );
+        } catch (err) {
+            alert(err.message || "Failed to verify NGO");
+        }
+    };
+
+    const handleBlock = async (id) => {
+        try {
+            await blockNGO(id);
+            // Update local state
+            setNgoList((prev) =>
+                prev.map((n) => n.id === id ? { ...n, status: "Pending", isVerified: false } : n)
+            );
+        } catch (err) {
+            alert(err.message || "Failed to block NGO");
+        }
+    };
+
+    const STATUS_STYLE = {
+        Pending: { color: COLORS.warning, bg: COLORS.warningLight, icon: "clock-outline" },
+        Verified: { color: COLORS.success, bg: COLORS.successLight, icon: "shield-check" },
     };
 
     const filtered = ngoList.filter((n) => activeTab === "All" || n.status === activeTab);
@@ -46,11 +77,23 @@ export default function NGOs() {
     const AVATAR_COLORS = [COLORS.primary, COLORS.success, COLORS.accentBlue, COLORS.accentPurple];
     const avatarColor = (name) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
-    const STATUS_STYLE = {
-        Pending: { color: COLORS.warning, bg: COLORS.warningLight, icon: "clock-outline" },
-        Verified: { color: COLORS.success, bg: COLORS.successLight, icon: "shield-check" },
-        Rejected: { color: COLORS.error, bg: COLORS.errorLight, icon: "close-circle" },
-    };
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+                <MaterialCommunityIcons name="loading" size={40} color={COLORS.primary} />
+                <Text style={{ marginTop: 12, color: COLORS.grayText }}>Loading NGOs...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={40} color={COLORS.error} />
+                <Text style={{ marginTop: 12, color: COLORS.error, textAlign: "center", paddingHorizontal: 20 }}>{error}</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
@@ -62,8 +105,8 @@ export default function NGOs() {
                         {ngoList.filter(n => n.status === "Pending").length} pending approval
                     </Text>
                 </View>
-                <TouchableOpacity style={styles.filterBtn}>
-                    <MaterialCommunityIcons name="filter-variant" size={20} color={COLORS.textDark} />
+                <TouchableOpacity style={styles.filterBtn} onPress={fetchNGOs}>
+                    <MaterialCommunityIcons name="refresh" size={20} color={COLORS.textDark} />
                 </TouchableOpacity>
             </View>
 
@@ -119,8 +162,8 @@ export default function NGOs() {
                                 <View style={styles.ngoInfo}>
                                     <Text style={styles.ngoName}>{item.name}</Text>
                                     <View style={styles.locationRow}>
-                                        <MaterialCommunityIcons name="map-marker" size={12} color={COLORS.grayText} />
-                                        <Text style={styles.locationText}>{item.location}</Text>
+                                        <MaterialCommunityIcons name="email-outline" size={12} color={COLORS.grayText} />
+                                        <Text style={styles.locationText}>{item.email}</Text>
                                     </View>
                                 </View>
                                 <View style={[styles.statusBadge, { backgroundColor: ss.bg }]}>
@@ -129,47 +172,16 @@ export default function NGOs() {
                                 </View>
                             </View>
 
-                            {/* Meta row */}
-                            <View style={styles.metaRow}>
-                                <View style={styles.metaItem}>
-                                    <MaterialCommunityIcons name="calendar-outline" size={13} color={COLORS.grayText} />
-                                    <Text style={styles.metaText}>{item.date}</Text>
-                                </View>
-                                <View style={styles.metaItem}>
-                                    <MaterialCommunityIcons name="account-group-outline" size={13} color={COLORS.grayText} />
-                                    <Text style={styles.metaText}>{item.members} members</Text>
-                                </View>
-                            </View>
-
-                            {/* Docs */}
-                            {item.docs.length > 0 && (
-                                <View style={styles.docsRow}>
-                                    {item.docs.map((doc) => (
-                                        <TouchableOpacity key={doc} style={styles.docChip}>
-                                            <MaterialCommunityIcons name="file-pdf-box" size={13} color={COLORS.error} />
-                                            <Text style={styles.docText} numberOfLines={1}>{doc}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            )}
-
-                            {item.docs.length === 0 && (
-                                <View style={styles.noDocsRow}>
-                                    <MaterialCommunityIcons name="alert-circle-outline" size={14} color={COLORS.warning} />
-                                    <Text style={styles.noDocsText}>No documents uploaded</Text>
-                                </View>
-                            )}
-
                             <View style={styles.divider} />
 
                             {/* Actions */}
                             {isPending && (
                                 <View style={styles.actionRow}>
-                                    <TouchableOpacity style={styles.rejectBtn} onPress={() => updateStatus(item.id, "Rejected")}>
+                                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handleBlock(item.id)}>
                                         <MaterialCommunityIcons name="close" size={18} color={COLORS.error} />
                                         <Text style={styles.rejectText}>Reject</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity style={styles.verifyBtn} onPress={() => updateStatus(item.id, "Verified")}>
+                                    <TouchableOpacity style={styles.verifyBtn} onPress={() => handleVerify(item.id)}>
                                         <MaterialCommunityIcons name="shield-check" size={18} color={COLORS.white} />
                                         <Text style={styles.verifyText}>Verify & Approve</Text>
                                     </TouchableOpacity>
@@ -182,19 +194,9 @@ export default function NGOs() {
                                         <MaterialCommunityIcons name="shield-check" size={18} color={COLORS.success} />
                                         <Text style={styles.verifiedText}>Verified NGO</Text>
                                     </View>
-                                    <TouchableOpacity style={styles.viewDetailsBtn}>
-                                        <Text style={styles.viewDetailsText}>View Details</Text>
-                                        <MaterialCommunityIcons name="arrow-right" size={15} color={COLORS.primary} />
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-
-                            {item.status === "Rejected" && (
-                                <View style={styles.rejectedRow}>
-                                    <MaterialCommunityIcons name="close-circle-outline" size={16} color={COLORS.error} />
-                                    <Text style={styles.rejectedText}>Registration rejected</Text>
-                                    <TouchableOpacity>
-                                        <Text style={styles.reviewAgainText}>Review again</Text>
+                                    <TouchableOpacity style={styles.blockBtn} onPress={() => handleBlock(item.id)}>
+                                        <Text style={styles.blockText}>Block</Text>
+                                        <MaterialCommunityIcons name="close-circle-outline" size={15} color={COLORS.error} />
                                     </TouchableOpacity>
                                 </View>
                             )}
@@ -203,6 +205,12 @@ export default function NGOs() {
                 }}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                    <View style={{ alignItems: "center", marginTop: 40 }}>
+                        <MaterialCommunityIcons name="inbox-outline" size={40} color={COLORS.grayText} />
+                        <Text style={{ marginTop: 12, color: COLORS.grayText }}>No NGOs found</Text>
+                    </View>
+                }
             />
         </View>
     );
@@ -254,17 +262,6 @@ const styles = StyleSheet.create({
         paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9999,
     },
     statusText: { fontSize: 11, fontWeight: "800" },
-    metaRow: { flexDirection: "row", gap: 16, marginBottom: 12 },
-    metaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-    metaText: { fontSize: 12, color: COLORS.grayText, fontWeight: "500" },
-    docsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-    docChip: {
-        flexDirection: "row", alignItems: "center", gap: 5,
-        backgroundColor: COLORS.errorLight, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8,
-    },
-    docText: { fontSize: 11, fontWeight: "700", color: COLORS.error, maxWidth: 120 },
-    noDocsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 },
-    noDocsText: { fontSize: 12, color: COLORS.warning, fontWeight: "600" },
     divider: { height: 1, backgroundColor: "#F5F5F5", marginBottom: 14 },
     actionRow: { flexDirection: "row", gap: 10 },
     rejectBtn: {
@@ -282,9 +279,6 @@ const styles = StyleSheet.create({
     verifiedRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
     verifiedInfo: { flexDirection: "row", alignItems: "center", gap: 6 },
     verifiedText: { fontSize: 14, fontWeight: "700", color: COLORS.success },
-    viewDetailsBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
-    viewDetailsText: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
-    rejectedRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    rejectedText: { flex: 1, fontSize: 13, color: COLORS.error, fontWeight: "600" },
-    reviewAgainText: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
+    blockBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
+    blockText: { fontSize: 13, fontWeight: "700", color: COLORS.error },
 });

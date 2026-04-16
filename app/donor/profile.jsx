@@ -4,18 +4,13 @@ import {
   KeyboardAvoidingView, Linking, Image, Alert,
 } from "react-native";
 import { useState, useRef, useEffect } from "react";
-import { getProfile, updateProfile } from "../services/api";
+import { getProfile, updateProfile, getDonorDashboard } from "../services/api";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
 import * as ImagePicker from "expo-image-picker";
 
-const STATS = [
-  { value: "45", label: "Donations", color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
-  { value: "350", label: "People Fed", color: "#2D6A4F", bg: "#EAF5EF", icon: "account-group" },
-  { value: "125", label: "kg Donated", color: "#2B7FFF", bg: "#EBF2FF", icon: "weight-kilogram" },
-];
-
+// Static UI configuration - not data
 const SETTINGS = [
   { icon: "bell-outline", label: "Notifications", color: "#FF6B2B", bg: "#FFF0EB" },
   { icon: "shield-lock-outline", label: "Privacy", color: "#2B7FFF", bg: "#EBF2FF" },
@@ -76,27 +71,65 @@ export default function DonorProfile() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [stats, setStats] = useState([
+    { value: "0", label: "Donations", color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
+    { value: "0", label: "People Fed", color: "#2D6A4F", bg: "#EAF5EF", icon: "account-group" },
+    { value: "0", label: "kg Donated", color: "#2B7FFF", bg: "#EBF2FF", icon: "weight-kilogram" },
+  ]);
   const router = useRouter();
   const [photoUri, setPhotoUri] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch profile on mount
+  // Fetch profile and stats on mount
   useEffect(() => {
+    let mounted = true;
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await getProfile();
-        setName(data.name || "");
-        setEmail(data.email || "");
-        setPhone(data.phone || "");
-        setAddress(data.address || data.location || "");
+        // Fetch profile data
+        const profileData = await getProfile();
+        if (mounted) {
+          setName(profileData.name || "");
+          setEmail(profileData.email || "");
+          setPhone(profileData.phone || "");
+          setAddress(profileData.address || profileData.location || "");
+        }
+
+        // Fetch dashboard data for stats
+        const dashboardData = await getDonorDashboard();
+        if (mounted && dashboardData) {
+          setStats([
+            { 
+              value: String(dashboardData.totalDonations || 0), 
+              label: "Donations", 
+              color: "#FF6B2B", 
+              bg: "#FFF0EB", 
+              icon: "food-fork-drink" 
+            },
+            { 
+              value: String(dashboardData.peopleFed || 0), 
+              label: "People Fed", 
+              color: "#2D6A4F", 
+              bg: "#EAF5EF", 
+              icon: "account-group" 
+            },
+            { 
+              value: String(dashboardData.foodQuantity || 0), 
+              label: "kg Donated", 
+              color: "#2B7FFF", 
+              bg: "#EBF2FF", 
+              icon: "weight-kilogram" 
+            },
+          ]);
+        }
       } catch (err) {
-        setError("Failed to load profile");
+        if (mounted) setError("Failed to load profile");
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     })();
+    return () => { mounted = false; };
   }, []);
 
   // Save profile changes
@@ -262,8 +295,8 @@ export default function DonorProfile() {
 
         {/* ── STATS ── */}
         <View style={styles.statsCard}>
-          {STATS.map((s, i) => (
-            <View key={i} style={[styles.statItem, i < STATS.length - 1 && styles.statItemBorder]}>
+          {stats.map((s, i) => (
+            <View key={i} style={[styles.statItem, i < stats.length - 1 && styles.statItemBorder]}>
               <View style={[styles.statIconWrap, { backgroundColor: s.bg }]}>
                 <MaterialCommunityIcons name={s.icon} size={15} color={s.color} />
               </View>

@@ -361,14 +361,20 @@ export default function PostDonation() {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // Prepare payload
+      // Validate location has coordinates
+      if (!locationCoords) {
+        Alert.alert("Location Error", "Please select a location on the map with proper coordinates.");
+        setLoading(false);
+        return;
+      }
+
+      // Prepare payload - location must be an object with latitude/longitude
       const payload = {
         foodName,
         foodType,
         quantity,
         expiry,
-        location,
-        locationCoords: locationCoords ? JSON.stringify(locationCoords) : undefined,
+        location: locationCoords, // Send as object, not string
         pickupTime,
         note,
         imageUri,
@@ -389,34 +395,29 @@ export default function PostDonation() {
   };
 
   // ── Success screen
-  if (submitted) {
-    return (
-      <View style={styles.root}>
-        <View style={styles.header}>
-          <View style={styles.headerBlob} />
-          <View style={styles.headerTop}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-              <MaterialCommunityIcons name="arrow-left" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
+ if (submitted) {
+  return (
+    <View style={styles.root}>
+      <View style={styles.header}>
+        <View style={styles.headerBlob} />
+        <View style={styles.headerTop}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <MaterialCommunityIcons name="arrow-left" size={20} color="#fff" />
+          </TouchableOpacity>
         </View>
-        {/* Pass food object to SuccessView */}
-        <SuccessView onReset={handleReset} data={{
+      </View>
+
+      <SuccessView
+        onReset={handleReset}
+        data={{
           foodName: submitted.foodName,
           quantity: submitted.quantity,
           pickupTime: submitted.pickupTime,
-        }} />
-      </View>
-    );
-  }
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.headerTitle}>Donation Posted</Text>
-        </View>
-        <SuccessView onReset={handleReset} data={{ foodName, quantity, pickupTime }} />
-      </View>
-    );
-  }
+        }}
+      />
+    </View>
+  );
+}
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : "height"}>

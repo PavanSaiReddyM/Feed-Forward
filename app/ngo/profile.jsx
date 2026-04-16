@@ -3,10 +3,11 @@ import {
     TextInput, ScrollView, Platform, Modal, Animated, Easing,
     KeyboardAvoidingView, Linking, Image, Alert,
 } from "react-native";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
+import { getProfile, updateProfile, getNgoDashboard } from "../services/api";
 import * as ImagePicker from "expo-image-picker";
 
 const SETTINGS = [
@@ -59,12 +60,50 @@ function useSheet(initial = 600) {
 }
 
 export default function NgoProfile() {
-    const [ngoName, setNgoName] = useState("Helping Hands NGO");
-    const [email, setEmail] = useState("helpinghands@gmail.com");
-    const [phone, setPhone] = useState("+91 98765 43210");
-    const [address, setAddress] = useState("Hyderabad, Telangana");
+    const [ngoName, setNgoName] = useState("");
+    const [email, setEmail] = useState("");
+    const [phone, setPhone] = useState("");
+    const [address, setAddress] = useState("");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const router = useRouter();
     const [photoUri, setPhotoUri] = useState(null);
+    const [pickups, setPickups] = useState("0");
+    const [peopleFed, setPeopleFed] = useState("0");
+    const [foodSaved, setFoodSaved] = useState("0");
+
+    // Fetch profile on mount
+    useEffect(() => {
+        let mounted = true;
+
+        const fetchProfile = async () => {
+            try {
+                setLoading(true);
+                const [profileData, dashboardData] = await Promise.all([getProfile(), getNgoDashboard()]);
+                if (mounted) {
+                    // Set profile info
+                    setNgoName(profileData.name || "");
+                    setEmail(profileData.email || "");
+                    setPhone(profileData.phone || "");
+                    setAddress(profileData.location || "");
+                    // Set impact stats from dashboard (nested in stats object)
+                    const stats = dashboardData.stats || dashboardData;
+                    setPickups(String(stats.totalPickups || 0));
+                    setPeopleFed(String(stats.peopleFed || 0));
+                    // Calculate food saved based on people fed (estimate: 1 person = 0.5kg)
+                    const foodSavedKg = Math.round((stats.peopleFed || 0) * 0.5);
+                    setFoodSaved(`~${foodSavedKg}kg`);
+                }
+            } catch (err) {
+                if (mounted) setError(err.message || "Failed to load profile");
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+
+        fetchProfile();
+        return () => { mounted = false; };
+    }, []);
 
     const pickPhoto = async (source) => {
         try {
@@ -175,6 +214,24 @@ export default function NgoProfile() {
         </Modal>
     );
 
+    if (loading) {
+        return (
+            <View style={[{ flex: 1, justifyContent: "center", alignItems: "center" }, styles.container]}>
+                <MaterialCommunityIcons name="loading" size={40} color={COLORS.success} />
+                <Text style={{ marginTop: 12, color: COLORS.grayText }}>Loading profile...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={[{ flex: 1, justifyContent: "center", alignItems: "center" }, styles.container]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={40} color={COLORS.error} />
+                <Text style={{ marginTop: 12, color: COLORS.error, textAlign: "center", paddingHorizontal: 20 }}>{error}</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={{ flex: 1 }}>
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -204,12 +261,11 @@ export default function NgoProfile() {
                     </View>
                 </View>
 
-                {/* ── IMPACT STATS ── */}
-                <View style={styles.impactRow}>
+                 <View style={styles.impactRow}>
                     {[
-                        { num: "24", label: "Pickups", icon: "truck-delivery-outline", color: COLORS.primary },
-                        { num: "185", label: "People Fed", icon: "account-group-outline", color: COLORS.success },
-                        { num: "~95kg", label: "Food Saved", icon: "scale-balance", color: COLORS.accentBlue },
+                        { num: pickups, label: "Pickups", icon: "truck-delivery-outline", color: COLORS.primary },
+                        { num: peopleFed, label: "People Fed", icon: "account-group-outline", color: COLORS.success },
+                        { num: foodSaved, label: "Food Saved", icon: "scale-balance", color: COLORS.accentBlue },
                     ].map((s, i) => (
                         <View key={i} style={[styles.impactCell, i < 2 && styles.impactCellBorder]}>
                             <View style={[styles.impactIconWrap, { backgroundColor: s.color + "15" }]}>

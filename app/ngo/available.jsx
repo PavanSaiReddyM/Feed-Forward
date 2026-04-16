@@ -68,7 +68,11 @@ function DonationCard({ item, index, onNavigate, onRequest }) {
                 </View>
                 <View style={styles.infoItem}>
                     <MaterialCommunityIcons name="map-marker-outline" size={14} color={COLORS.primary} />
-                    <Text style={styles.infoText}>{item.location}</Text>
+                    <Text style={styles.infoText}>
+                        {typeof item.location === 'string' 
+                            ? item.location 
+                            : item.address || 'Location'}
+                    </Text>
                 </View>
                 <View style={styles.infoItem}>
                     <MaterialCommunityIcons name="timer-outline" size={14} color={item.urgent ? "#F59E0B" : COLORS.primary} />

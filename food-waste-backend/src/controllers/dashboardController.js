@@ -7,28 +7,33 @@ exports.donorDashboard = async (req, res) => {
   try {
     const userId = req.user.userId;
     // Total donations by donor
-    const totalDonations = await Food.countDocuments({ donor: userId });
+    const totalDonations = await Food.countDocuments({ donorId: userId });
     // Completed donations
-    const completed = await Food.countDocuments({ donor: userId, status: "Delivered" });
+    const completed = await Food.countDocuments({ donorId: userId, status: "delivered" });
     // Active donations
-    const active = await Food.countDocuments({ donor: userId, status: { $in: ["Posted", "Accepted", "En Route"] } });
-    // People fed (sum of peopleFed field if exists, else estimate)
-    const foods = await Food.find({ donor: userId });
+    const active = await Food.countDocuments({ donorId: userId, status: { $in: ["available", "accepted", "picked"] } });
+    // People fed (estimate based on quantity)
+    const foods = await Food.find({ donorId: userId });
     let peopleFed = 0;
     foods.forEach(f => {
-      if (f.peopleFed) peopleFed += f.peopleFed;
-      else if (f.quantity) peopleFed += Math.round(f.quantity * 2); // estimate: 1kg feeds 2 people
+      if (f.quantity) {
+        // Try to parse quantity as number, default to 2 people per item
+        const qty = parseInt(f.quantity) || 1;
+        peopleFed += qty * 2;
+      }
     });
     // Recent activity (last 5 donations)
-    const activity = await Food.find({ donor: userId }).sort({ createdAt: -1 }).limit(5);
+    const activity = await Food.find({ donorId: userId })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("acceptedBy", "name");
     // Notifications (last 5)
-    // For demo, just return recent activity as notifications
     const notifications = activity.map(f => ({
       id: f._id,
-      title: f.foodName + " status: " + f.status,
-      msg: f.description || "",
+      title: f.foodName + " - " + f.status,
+      msg: f.note || f.foodType || "",
       time: f.updatedAt,
-      unread: f.status !== "Delivered"
+      unread: f.status !== "delivered"
     }));
     res.json({
       stats: {
@@ -41,6 +46,7 @@ exports.donorDashboard = async (req, res) => {
       notifications
     });
   } catch (err) {
+    console.error("Donor dashboard error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -50,39 +56,48 @@ exports.ngoDashboard = async (req, res) => {
   try {
     const userId = req.user.userId;
     // Total pickups by NGO
-    const totalPickups = await Food.countDocuments({ ngo: userId });
+    const totalPickups = await Food.countDocuments({ acceptedBy: userId });
     // Completed pickups
-    const completed = await Food.countDocuments({ ngo: userId, status: "Delivered" });
+    const completed = await Food.countDocuments({ acceptedBy: userId, status: "delivered" });
     // Active pickups
-    const active = await Food.countDocuments({ ngo: userId, status: { $in: ["Accepted", "En Route"] } });
+    const active = await Food.countDocuments({ acceptedBy: userId, status: { $in: ["accepted", "picked"] } });
+    // Available food (not yet accepted)
+    const available = await Food.countDocuments({ status: "available" });
     // People fed
-    const foods = await Food.find({ ngo: userId });
+    const foods = await Food.find({ acceptedBy: userId });
     let peopleFed = 0;
     foods.forEach(f => {
-      if (f.peopleFed) peopleFed += f.peopleFed;
-      else if (f.quantity) peopleFed += Math.round(f.quantity * 2);
+      if (f.quantity) {
+        const qty = parseInt(f.quantity) || 1;
+        peopleFed += qty * 2;
+      }
     });
     // Recent activity (last 5 pickups)
-    const activity = await Food.find({ ngo: userId }).sort({ updatedAt: -1 }).limit(5);
+    const activity = await Food.find({ acceptedBy: userId })
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .populate("donorId", "name");
     // Notifications (last 5)
     const notifications = activity.map(f => ({
       id: f._id,
-      title: f.foodName + " status: " + f.status,
-      msg: f.description || "",
+      title: f.foodName + " - " + f.status,
+      msg: f.note || f.foodType || "",
       time: f.updatedAt,
-      unread: f.status !== "Delivered"
+      unread: f.status !== "delivered"
     }));
     res.json({
       stats: {
         totalPickups,
         completed,
         active,
+        available,
         peopleFed
       },
       activity,
       notifications
     });
   } catch (err) {
+    console.error("NGO dashboard error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -91,55 +106,69 @@ exports.ngoDashboard = async (req, res) => {
 exports.adminDashboard = async (req, res) => {
   try {
     // Platform-wide stats
-    const totalMeals = await Food.aggregate([
-      { $group: { _id: null, total: { $sum: "$peopleFed" } } }
-    ]);
+    const totalDonations = await Food.countDocuments({});
+    const activeFood = await Food.countDocuments({ status: "available" });
+    const completedFood = await Food.countDocuments({ status: "delivered" });
     const totalDonors = await User.countDocuments({ role: "donor" });
     const totalNGOs = await User.countDocuments({ role: "ngo" });
-    const pending = await Food.countDocuments({ status: "Posted" });
+    
     // Weekly stats (last 7 days)
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const weeklyMeals = await Food.aggregate([
-      { $match: { createdAt: { $gte: weekAgo } } },
-      { $group: { _id: null, total: { $sum: "$peopleFed" } } }
-    ]);
-    // Top donors (by meals fed)
+    const weeklyDonations = await Food.countDocuments({ createdAt: { $gte: weekAgo } });
+    
+    // Top donors (by donations)
     const topDonors = await Food.aggregate([
-      { $group: { _id: "$donor", meals: { $sum: "$peopleFed" } } },
-      { $sort: { meals: -1 } },
+      { $group: { _id: "$donorId", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
       { $limit: 5 },
       { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
       { $unwind: "$user" },
-      { $project: { name: "$user.name", meals: 1 } }
+      { $project: { name: "$user.name", count: 1 } }
     ]);
+    
     // Top NGOs (by pickups)
     const topNGOs = await Food.aggregate([
-      { $group: { _id: "$ngo", pickups: { $sum: 1 } } },
+      { $match: { acceptedBy: { $ne: null } } },
+      { $group: { _id: "$acceptedBy", pickups: { $sum: 1 } } },
       { $sort: { pickups: -1 } },
       { $limit: 5 },
       { $lookup: { from: "users", localField: "_id", foreignField: "_id", as: "user" } },
       { $unwind: "$user" },
       { $project: { name: "$user.name", pickups: 1 } }
     ]);
-    // Recent activity (last 5 donations/pickups)
-    const activity = await Food.find().sort({ updatedAt: -1 }).limit(5);
-    // Notifications (last 5 complaints, pending verifications, etc.)
-    const complaints = await Complaint.find().sort({ createdAt: -1 }).limit(5);
+    
+    // Recent activity (last 10 donations/pickups)
+    const activity = await Food.find()
+      .sort({ updatedAt: -1 })
+      .limit(10)
+      .populate("donorId", "name")
+      .populate("acceptedBy", "name");
+    
+    // Get all food with donation details for admin view
+    const allFood = await Food.find()
+      .sort({ createdAt: -1 })
+      .populate("donorId", "name email")
+      .populate("acceptedBy", "name email");
+    
     res.json({
       stats: {
-        totalMeals: totalMeals[0]?.total || 0,
+        totalDonations,
+        activeFood,
+        completedFood,
         totalDonors,
         totalNGOs,
-        pending,
-        weeklyMeals: weeklyMeals[0]?.total || 0
+        weeklyDonations
       },
       topDonors,
       topNGOs,
       activity,
-      notifications: complaints
+      allFood,
+      notifications: activity
     });
   } catch (err) {
+    console.error("Admin dashboard error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
+

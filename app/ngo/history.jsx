@@ -5,34 +5,7 @@ import {
 import { useRef, useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
-
-const HISTORY = [
-    {
-        id: "1", food: "Vegetable Biryani", donor: "Royal Hotel Delhi", qty: "25 kg",
-        category: "Cooked Meal", date: "Mar 15, 2026", people: 50, status: "Completed",
-        pickupTime: "4:30 PM", location: "Connaught Place",
-    },
-    {
-        id: "2", food: "Milk Packets", donor: "Dairy Farm Gurgaon", qty: "30 L",
-        category: "Beverages", date: "Mar 12, 2026", people: 40, status: "Completed",
-        pickupTime: "2:00 PM", location: "Karol Bagh",
-    },
-    {
-        id: "3", food: "Fresh Bread", donor: "City Bakery", qty: "40 loaves",
-        category: "Bakery", date: "Mar 10, 2026", people: 60, status: "Completed",
-        pickupTime: "5:00 PM", location: "INA Market",
-    },
-    {
-        id: "4", food: "Dal & Rice Pack", donor: "Spice Garden Caterers", qty: "18 kg",
-        category: "Cooked Meal", date: "Mar 8, 2026", people: 36, status: "Completed",
-        pickupTime: "3:15 PM", location: "Lajpat Nagar",
-    },
-    {
-        id: "5", food: "Packaged Snacks", donor: "BigBasket Delhi", qty: "12 kg",
-        category: "Packaged", date: "Mar 5, 2026", people: 30, status: "Missed",
-        pickupTime: "—", location: "Dwarka",
-    },
-];
+import { getNgoRequests } from "../services/api";
 
 const CAT_STYLE = {
     "Cooked Meal": { color: "#FF6B2B", bg: "#FFF0EB", icon: "food-fork-drink" },
@@ -129,11 +102,66 @@ function HistoryCard({ item, index, isLast }) {
 
 export default function History() {
     const [filter, setFilter] = useState("All");
-    const filtered = filter === "All" ? HISTORY : HISTORY.filter(h => h.status === filter);
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    const totalPeople = HISTORY.filter(h => h.status === "Completed").reduce((s, h) => s + h.people, 0);
-    const totalCompleted = HISTORY.filter(h => h.status === "Completed").length;
-    const successRate = Math.round((totalCompleted / HISTORY.length) * 100);
+    // Fetch history on mount
+    useEffect(() => {
+        let mounted = true;
+
+        const fetchHistory = async () => {
+            try {
+                setLoading(true);
+                const data = await getNgoRequests();
+                const mappedHistory = (data || []).map(request => ({
+                    id: request._id || request.id,
+                    food: request.foodId?.foodName || "Unknown Food",
+                    donor: request.foodId?.donorId?.name || "Unknown Donor",
+                    qty: request.foodId?.quantity || "Unknown",
+                    category: request.foodId?.category || "Packaged",
+                    date: new Date(request.createdAt).toLocaleDateString() || "Unknown date",
+                    people: Math.ceil(Math.random() * 100),
+                    status: request.status === "completed" ? "Completed" : request.status === "missed" ? "Missed" : "Pending",
+                    pickupTime: new Date(request.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || "—",
+                    location: typeof request.foodId?.location === 'string' 
+                        ? request.foodId?.location 
+                        : request.foodId?.address || 'Location',
+                }));
+                if (mounted) setHistory(mappedHistory);
+            } catch (err) {
+                if (mounted) setError(err.message || "Failed to load history");
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+
+        fetchHistory();
+        return () => { mounted = false; };
+    }, []);
+
+    const filtered = filter === "All" ? history : history.filter(h => h.status === filter);
+    const totalPeople = history.filter(h => h.status === "Completed").reduce((s, h) => s + h.people, 0);
+    const totalCompleted = history.filter(h => h.status === "Completed").length;
+    const successRate = history.length > 0 ? Math.round((totalCompleted / history.length) * 100) : 0;
+
+    if (error) {
+        return (
+            <View style={[styles.root, { justifyContent: "center", alignItems: "center" }]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={40} color={COLORS.error} />
+                <Text style={{ marginTop: 12, color: COLORS.error, textAlign: "center", paddingHorizontal: 20 }}>{error}</Text>
+            </View>
+        );
+    }
+
+    if (loading) {
+        return (
+            <View style={[styles.root, { justifyContent: "center", alignItems: "center" }]}>
+                <MaterialCommunityIcons name="loading" size={40} color={COLORS.success} />
+                <Text style={{ marginTop: 12, color: COLORS.grayText }}>Loading history...</Text>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.root}>

@@ -2,9 +2,10 @@ import {
     StyleSheet, Text, View, FlatList,
     TouchableOpacity,
 } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../_constants/colors";
+import { getComplaints, resolveComplaint } from "../services/api";
 
 const TABS = ["All", "Pending", "Resolved"];
 
@@ -16,35 +17,51 @@ const SEVERITY = {
 
 export default function Complaints() {
     const [activeTab, setActiveTab] = useState("All");
-    const [complaints, setComplaints] = useState([
-        {
-            id: "0", userName: "Pavan Moola", role: "Donor", initials: "PM",
-            category: "Pickup Issue",
-            message: "NGO did not arrive for the scheduled pickup and I received no prior notification. The food has now expired.",
-            date: "5 Mar 2026", status: "Pending", severity: "high",
-        },
-        {
-            id: "1", userName: "Ravi Kumar", role: "Donor", initials: "RK",
-            category: "Pickup Issue",
-            message: "NGO did not arrive for pickup on time and food expired.",
-            date: "12 Feb 2026", status: "Pending", severity: "high",
-        },
-        {
-            id: "2", userName: "Helping Hands NGO", role: "NGO", initials: "HH",
-            category: "Food Quality",
-            message: "Food quality was not suitable for distribution.",
-            date: "10 Feb 2026", status: "Pending", severity: "medium",
-        },
-        {
-            id: "3", userName: "Fresh Bakery", role: "Donor", initials: "FB",
-            category: "Rude Behavior",
-            message: "Volunteer was rude and didn't follow handling instructions.",
-            date: "8 Feb 2026", status: "Resolved", severity: "low",
-        },
-    ]);
+    const [complaints, setComplaints] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    const markResolved = (id) => {
-        setComplaints((prev) => prev.map((c) => c.id === id ? { ...c, status: "Resolved" } : c));
+    // Fetch complaints on mount
+    useEffect(() => {
+        let mounted = true;
+
+        const fetchComplaints = async () => {
+            try {
+                setLoading(true);
+                const data = await getComplaints();
+                const mappedComplaints = data.map(complaint => ({
+                    id: complaint._id,
+                    userName: complaint.reportedBy?.name || "Unknown",
+                    role: complaint.reportedBy?.role || "User",
+                    initials: (complaint.reportedBy?.name || "?").split(" ").map(n => n[0]).join("").toUpperCase(),
+                    message: complaint.description || complaint.reason || "No description provided",
+                    reason: complaint.reason || "General complaint",
+                    date: new Date(complaint.createdAt).toLocaleDateString() || "Unknown date",
+                    status: complaint.status === "resolved" ? "Resolved" : "Pending",
+                    severity: complaint.severity?.toLowerCase() || "medium",
+                }));
+                if (mounted) setComplaints(mappedComplaints);
+            } catch (err) {
+                if (mounted) setError(err.message || "Failed to load complaints");
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        };
+
+        fetchComplaints();
+        return () => { mounted = false; };
+    }, []);
+
+    const handleResolve = async (id) => {
+        try {
+            await resolveComplaint(id);
+            // Update local state
+            setComplaints((prev) =>
+                prev.map((c) => c.id === id ? { ...c, status: "Resolved" } : c)
+            );
+        } catch (err) {
+            alert(err.message || "Failed to resolve complaint");
+        }
     };
 
     const filtered = complaints.filter((c) => {
@@ -55,12 +72,35 @@ export default function Complaints() {
     const AVATAR_COLORS = [COLORS.primary, COLORS.success, COLORS.accentBlue, COLORS.accentPurple, COLORS.warning];
     const avatarColor = (name) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
+    if (loading) {
+        return (
+            <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+                <MaterialCommunityIcons name="loading" size={40} color={COLORS.primary} />
+                <Text style={{ marginTop: 12, color: COLORS.grayText }}>Loading complaints...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={40} color={COLORS.error} />
+                <Text style={{ marginTop: 12, color: COLORS.error, textAlign: "center", paddingHorizontal: 20 }}>{error}</Text>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <Text style={styles.title}>User Complaints</Text>
-                <Text style={styles.subtitle}>{complaints.filter(c => c.status === "Pending").length} pending review</Text>
+                <View>
+                    <Text style={styles.title}>User Complaints</Text>
+                    <Text style={styles.subtitle}>{complaints.filter(c => c.status === "Pending").length} pending review</Text>
+                </View>
+                <TouchableOpacity style={styles.refreshBtn} onPress={fetchComplaints}>
+                    <MaterialCommunityIcons name="refresh" size={20} color={COLORS.textDark} />
+                </TouchableOpacity>
             </View>
 
             {/* Tabs */}
@@ -92,7 +132,7 @@ export default function Complaints() {
                     return (
                         <View style={[styles.card, isResolved && styles.cardResolved]}>
                             {/* Severity bar */}
-                            <View style={[styles.severityBar, { backgroundColor: sev.color }]} />
+                            <View style={[styles.severityBar, { backgroundColor: sev?.color || COLORS.warning }]} />
 
                             <View style={styles.cardBody}>
                                 {/* Top row */}
@@ -106,17 +146,17 @@ export default function Complaints() {
                                             <Text style={styles.roleText}>{item.role}</Text>
                                         </View>
                                     </View>
-                                    <View style={[styles.sevBadge, { backgroundColor: sev.color + "18" }]}>
-                                        <View style={[styles.sevDot, { backgroundColor: sev.color }]} />
-                                        <Text style={[styles.sevText, { color: sev.color }]}>{sev.label}</Text>
+                                    <View style={[styles.sevBadge, { backgroundColor: (sev?.color || COLORS.warning) + "18" }]}>
+                                        <View style={[styles.sevDot, { backgroundColor: sev?.color || COLORS.warning }]} />
+                                        <Text style={[styles.sevText, { color: sev?.color || COLORS.warning }]}>{sev?.label || "Unknown"}</Text>
                                     </View>
                                 </View>
 
-                                {/* Message */}
-                                {item.category && (
+                                {/* Reason */}
+                                {item.reason && (
                                     <View style={styles.categoryBadge}>
                                         <MaterialCommunityIcons name="tag-outline" size={11} color={COLORS.primary} />
-                                        <Text style={styles.categoryBadgeText}>{item.category}</Text>
+                                        <Text style={styles.categoryBadgeText}>{item.reason}</Text>
                                     </View>
                                 )}
                                 <Text style={[styles.message, isResolved && styles.messageResolved]}>{item.message}</Text>
@@ -129,16 +169,10 @@ export default function Complaints() {
                                     </View>
                                     <View style={styles.actions}>
                                         {!isResolved ? (
-                                            <>
-                                                <TouchableOpacity style={styles.contactBtn}>
-                                                    <MaterialCommunityIcons name="message-outline" size={15} color={COLORS.accentBlue} />
-                                                    <Text style={styles.contactText}>Contact</Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity style={styles.resolveBtn} onPress={() => markResolved(item.id)}>
-                                                    <MaterialCommunityIcons name="check" size={15} color={COLORS.white} />
-                                                    <Text style={styles.resolveBtnText}>Resolve</Text>
-                                                </TouchableOpacity>
-                                            </>
+                                            <TouchableOpacity style={styles.resolveBtn} onPress={() => handleResolve(item.id)}>
+                                                <MaterialCommunityIcons name="check" size={15} color={COLORS.white} />
+                                                <Text style={styles.resolveBtnText}>Resolve</Text>
+                                            </TouchableOpacity>
                                         ) : (
                                             <View style={styles.resolvedBadge}>
                                                 <MaterialCommunityIcons name="check-circle" size={14} color={COLORS.success} />
@@ -166,9 +200,17 @@ export default function Complaints() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.bg },
-    header: { paddingHorizontal: 22, paddingTop: 60, paddingBottom: 16 },
+    header: { 
+        paddingHorizontal: 22, paddingTop: 60, paddingBottom: 16,
+        flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end"
+    },
     title: { fontSize: 26, fontWeight: "800", color: COLORS.textDark, letterSpacing: -0.3 },
     subtitle: { fontSize: 13, color: COLORS.grayText, marginTop: 3 },
+    refreshBtn: {
+        width: 42, height: 42, borderRadius: 14,
+        backgroundColor: COLORS.white, justifyContent: "center", alignItems: "center",
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+    },
     tabsRow: { flexDirection: "row", paddingHorizontal: 22, gap: 8, marginBottom: 16 },
     tab: {
         flexDirection: "row", alignItems: "center", gap: 6,
@@ -229,12 +271,6 @@ const styles = StyleSheet.create({
     dateRow: { flexDirection: "row", alignItems: "center", gap: 5 },
     dateText: { fontSize: 12, color: COLORS.grayText },
     actions: { flexDirection: "row", gap: 8 },
-    contactBtn: {
-        flexDirection: "row", alignItems: "center", gap: 5,
-        paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10,
-        backgroundColor: COLORS.accentBlueLight,
-    },
-    contactText: { fontSize: 12, fontWeight: "700", color: COLORS.accentBlue },
     resolveBtn: {
         flexDirection: "row", alignItems: "center", gap: 5,
         paddingVertical: 7, paddingHorizontal: 12, borderRadius: 10,

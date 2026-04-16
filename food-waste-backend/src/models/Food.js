@@ -3,13 +3,16 @@ const mongoose = require("mongoose");
 const FoodSchema = new mongoose.Schema({
   donorId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   foodName: String,
+  foodType: String,
   quantity: String,
-  expiryTime: Date,
+  expiryTime: { type: Date, required: false },
   imageUrl: String,
   location: {
     latitude: Number,
     longitude: Number
   },
+  pickupTime: String,
+  note: String,
   status: {
     type: String,
     enum: ["available", "accepted", "picked", "delivered"],
